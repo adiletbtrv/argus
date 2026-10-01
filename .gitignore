@@ -1,0 +1,20 @@
+# Build outputs
+*.obj
+*.o
+*.exe
+*.out
+*.bin
+*.hex
+*.elf
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*~
+*.suo
+*.user
+
+# Arduino build folders
+build/
+.arduino/
