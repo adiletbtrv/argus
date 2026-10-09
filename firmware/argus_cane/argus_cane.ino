@@ -1,6 +1,7 @@
 // Основная прошивка умной трости Argus.
 // Датчик положения MPU6050 (0x68), дешифратор 74HC138,
-// Bluetooth HC-05 (SoftwareSerial D10/D11) и виброотклик (PWM D9).
+// ультразвуковой датчик расстояния RCWL-9610A (HC-SR04),
+// виброотклик (PWM D9) и односторонняя Bluetooth-телеметрия HC-05 (TX D11).
 
 #include <Wire.h>
 #include <SoftwareSerial.h>
@@ -16,66 +17,59 @@ const int PIN_A = 2; // Адресный вход A (бит 0)
 const int PIN_B = 3; // Адресный вход B (бит 1)
 const int PIN_C = 4; // Адресный вход C (бит 2, зафиксирован в LOW для Y0..Y3)
 
+// Пины ультразвукового датчика расстояния RCWL-9610A (HC-SR04)
+const int PIN_TRIG = 5; // Сигнал запуска измерения (Trig)
+const int PIN_ECHO = 6; // Вход эхо-импульса (Echo)
+
 // Управление вибромоторчиком (ШИМ через NPN-транзистор)
 const int PIN_VIBRO = 9;
 
-// Пины модуля Bluetooth HC-05
-const int BT_RX_PIN = 10; // RX Arduino (подключается к TX HC-05)
-const int BT_TX_PIN = 11; // TX Arduino (к RX HC-05 через делитель напряжения)
+// Пины модуля Bluetooth HC-05 (SoftwareSerial)
+// Аппаратные пины D0/D1 сохранены для USB-отладки (Serial Monitor)
+const int BT_RX_PIN = 10; // Не используется для приема (односторонняя телеметрия)
+const int BT_TX_PIN = 11; // TX Arduino к RX HC-05 через делитель напряжения (1к / 2к)
+
+// Параметры обнаружения препятствий и виброотклика
+const long OBSTACLE_THRESHOLD_CM = 50; // Порог дистанции для тактильного сигнала (см)
+const int VIBRO_INTENSITY = 255;       // Интенсивность вибрации
 
 SoftwareSerial btSerial(BT_RX_PIN, BT_TX_PIN);
 MPU6050 mpu(Wire);
 DirectionClassifier classifier;
 Direction lastReportedDir = Direction::CENTER;
 
-// Переменные для неблокирующего импульса виброотклика
-bool vibroActive = false;
-unsigned long vibroEndTime = 0;
-const unsigned long VIBRO_PULSE_MS = 250;
-const int VIBRO_INTENSITY = 255;
+unsigned long lastDistanceCheckMs = 0;
+const unsigned long DISTANCE_CHECK_INTERVAL_MS = 60;
 
-void triggerVibration(unsigned long durationMs = VIBRO_PULSE_MS, int intensity = VIBRO_INTENSITY) {
-  analogWrite(PIN_VIBRO, intensity);
-  vibroEndTime = millis() + durationMs;
-  vibroActive = true;
+long readDistanceCm() {
+  digitalWrite(PIN_TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(PIN_TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(PIN_TRIG, LOW);
+
+  unsigned long duration = pulseIn(PIN_ECHO, HIGH, 25000); // таймаут ~4.3 м
+  if (duration == 0) {
+    return -1; // Препятствие вне зоны обнаружения
+  }
+  return duration / 58; // Дистанция в см
 }
 
-void updateVibrationState() {
-  if (vibroActive && millis() >= vibroEndTime) {
-    analogWrite(PIN_VIBRO, 0);
-    vibroActive = false;
+const char* getDirectionString(Direction dir) {
+  switch (dir) {
+    case Direction::CENTER: return "CENTER";
+    case Direction::LEFT:   return "LEFT";
+    case Direction::RIGHT:  return "RIGHT";
+    default:                return "CENTER";
   }
 }
 
-void processBluetoothCommands() {
-  static String inputBuffer = "";
-
-  while (btSerial.available() > 0) {
-    char c = (char)btSerial.read();
-    if (c == '\n' || c == '\r') {
-      inputBuffer.trim();
-      if (inputBuffer.length() > 0) {
-        if (inputBuffer == "VIBRATE") {
-          triggerVibration();
-          Serial.println(F("[BT] Command: VIBRATE -> pulse triggered"));
-        } else {
-          Serial.print(F("[BT] Unknown command: "));
-          Serial.println(inputBuffer);
-        }
-        inputBuffer = "";
-      }
-    } else {
-      if (inputBuffer.length() < 32) {
-        inputBuffer += c;
-      }
-      // Обработка команды без переноса строки
-      if (inputBuffer.endsWith("VIBRATE")) {
-        triggerVibration();
-        Serial.println(F("[BT] Command: VIBRATE -> pulse triggered"));
-        inputBuffer = "";
-      }
-    }
-  }
+// Трость не принимает команды извне — вибрация и LED управляются только локальными датчиками, Bluetooth используется исключительно для исходящей телеметрии.
+void sendTelemetry(long distCm, Direction dir) {
+  btSerial.print(F("DIST:"));
+  btSerial.print(distCm);
+  btSerial.print(F(",DIR:"));
+  btSerial.println(getDirectionString(dir));
 }
 
 void applyDirectionOutputs(Direction dir) {
@@ -114,6 +108,11 @@ void setup() {
   digitalWrite(PIN_B, LOW);
   digitalWrite(PIN_C, LOW);
 
+  // Настройка ультразвукового датчика расстояния
+  pinMode(PIN_TRIG, OUTPUT);
+  pinMode(PIN_ECHO, INPUT);
+  digitalWrite(PIN_TRIG, LOW);
+
   // Настройка вывода вибромоторчика
   pinMode(PIN_VIBRO, OUTPUT);
   analogWrite(PIN_VIBRO, 0);
@@ -136,36 +135,39 @@ void setup() {
 }
 
 void loop() {
-  // Обработка команд от мобильного приложения по Bluetooth
-  processBluetoothCommands();
-
-  // Обновление состояния тактильного импульса
-  updateVibrationState();
-
-  // Опрос датчика и классификация поворота
+  // Опрос датчика положения и классификация направления поворота
   mpu.update();
   float roll = mpu.getAngleX();
-  Direction result = classifier.classify(roll, millis());
+  Direction currentDir = classifier.classify(roll, millis());
 
-  if (result != lastReportedDir) {
-    lastReportedDir = result;
-    applyDirectionOutputs(result);
+  if (currentDir != lastReportedDir) {
+    lastReportedDir = currentDir;
+    applyDirectionOutputs(currentDir);
 
     Serial.print(F("[DIR] "));
-    switch (result) {
-      case Direction::CENTER:
-        Serial.print(F("CENTER"));
-        break;
-      case Direction::LEFT:
-        Serial.print(F("LEFT"));
-        break;
-      case Direction::RIGHT:
-        Serial.print(F("RIGHT"));
-        break;
-    }
+    Serial.print(getDirectionString(currentDir));
     Serial.print(F(" | Крен: "));
     Serial.print(roll, 2);
     Serial.println(F(" deg"));
+  }
+
+  // Опрос локального датчика расстояния RCWL-9610A и управление вибромотором (прототип P0002)
+  unsigned long now = millis();
+  if (now - lastDistanceCheckMs >= DISTANCE_CHECK_INTERVAL_MS) {
+    lastDistanceCheckMs = now;
+    long dist = readDistanceCm();
+
+    if (dist > 0 && dist <= OBSTACLE_THRESHOLD_CM) {
+      // Препятствие обнаружено ближе порогового расстояния:
+      // 1. Активация вибромотора через транзистор (локальный тактильный контур)
+      analogWrite(PIN_VIBRO, VIBRO_INTENSITY);
+
+      // 2. Исходящая односторонняя телеметрия на смартфон
+      sendTelemetry(dist, currentDir);
+    } else {
+      // Препятствие отсутствует или дальше порога
+      analogWrite(PIN_VIBRO, 0);
+    }
   }
 
   delay(20);
