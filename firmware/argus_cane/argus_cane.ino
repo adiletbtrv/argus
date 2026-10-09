@@ -97,6 +97,7 @@ void applyDirectionOutputs(Direction dir) {
 void setup() {
   Serial.begin(9600);
   btSerial.begin(9600);
+  btSerial.stopListening(); // Отключаем прерывания RX: трость только передает, входящие байты игнорируются
   Wire.begin();
 
   // Настройка выходов дешифратора 74HC138
