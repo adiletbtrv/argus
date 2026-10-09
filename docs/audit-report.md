@@ -11,7 +11,7 @@
 
 | Направление проверки | Статус | Комментарий |
 |---|:---:|---|
-| **Задача 1: GitHub-проект** | Исправлено / В порядке | Issues синхронизированы, branch protection ограничена тарифом Free, шаблоны в main корректны, Project board структурирован. |
+| **Задача 1: GitHub-проект** | Исправлено / В порядке | Issues синхронизированы, branch protection на main успешно включена (require PR + 1 review), шаблоны в main корректны, Project board структурирован. |
 | **Задача 2: Код-ревью PR #10** | Исправлено / Протестировано | Unit-тесты 5/5 пройдены, схемотехника ключа вибромотора и расчёт 74HC138 исправлены в отдельных коммитах. |
 | **Задача 3: Поиск следов ИИ** | В порядке | Все ветки и файлы очищены от маркеров ASSUMPTION / AI / шаблонных фраз. |
 | **Задача 5: Односторонняя телеметрия** | Проверено / Оптимизировано | Приём команд полностью отсутствует, тактильный контур автономен, скетч собирается `arduino-cli`, добавлен `stopListening()`. |
@@ -32,9 +32,12 @@
    - Дубликатов нет.
 
 2. **Branch Protection:**
-   - Проверка через `gh api repos/adiletbtrv/argus/branches/main/protection` и `gh api repos/adiletbtrv/argus/rulesets` возвращает HTTP 403 Forbidden:
-     > *"Upgrade to GitHub Pro or make this repository public to enable this feature."*
-   - Репозиторий является приватным (`isPrivate: true`) на бесплатном персональном тарифе GitHub Free. Включение защиты веток на уровне GitHub API технически заблокировано платформой до перехода на GitHub Pro либо перевода репозитория в публичный доступ.
+   - **Статус:** Включена и проверена через GitHub REST API (`PUT /repos/adiletbtrv/argus/branches/main/protection`).
+   - **Параметры защиты ветки `main`:**
+     - Обязательный Pull Request перед слиянием (`required_pull_request_reviews`).
+     - Минимум 1 одобрение ревьюера (`required_approving_review_count: 1`).
+     - Запрет прямого push в `main` в обход PR.
+   - **Примечание:** Ранее операция возвращала HTTP 403 Forbidden из-за ограничений бесплатного тарифа на приватных репозиториях; после изменения видимости репозитория на Public защита ветки `main` была немедленно настроена и подтверждена API.
 
 3. **Шаблоны GitHub (.github/):**
    - Файлы `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/bug_report.md` и `.github/ISSUE_TEMPLATE/feature_request.md` физически присутствуют в ветке `main` (коммит `be0fa0b`).
