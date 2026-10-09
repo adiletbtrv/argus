@@ -1,10 +1,9 @@
-// ASSUMPTION: Pure C++ implementation without Arduino dependencies.
-// ASSUMPTION: Positive roll angles (>= thresholdDeg) denote turning RIGHT.
-// ASSUMPTION: Negative roll angles (<= -thresholdDeg) denote turning LEFT.
-// ASSUMPTION: `pendingDir` tracks candidate direction pending hold-time verification.
-
 #ifndef DIRECTION_LOGIC_H
 #define DIRECTION_LOGIC_H
+
+// Модуль классификации направления на чистом C++ без платформозависимых вызовов.
+// Положительный угол крена соответствует повороту направо, отрицательный — налево.
+// pendingDir отслеживает кандидатное направление до подтверждения по тайм-ауту удержания.
 
 enum class Direction {
   CENTER,
@@ -20,8 +19,7 @@ struct DirectionClassifier {
   unsigned long pendingSince = 0;
   Direction pendingDir = Direction::CENTER;
 
-  // classify принимает угол крена (rollDeg) и текущую временную метку (nowMs).
-  // Функция не использует millis() напрямую, что обеспечивает детерминированное тестирование.
+  // Функция принимает угол крена (rollDeg) и монотонную временную метку (nowMs).
   Direction classify(float rollDeg, unsigned long nowMs);
 };
 
