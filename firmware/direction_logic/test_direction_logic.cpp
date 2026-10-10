@@ -1,6 +1,5 @@
-// ASSUMPTION: Standalone C++ unit test runner using assert and standard library.
-// ASSUMPTION: Compatible with both g++ and cl.exe compilers.
-// Exits with code 0 on all tests passing, exits with code 1 on failure.
+// Модульные тесты для логики классификации поворотов (g++ / cl.exe).
+// Возвращает 0 при успешном прохождении всех тестов, 1 при ошибке.
 
 #include <iostream>
 #include <cstdlib>

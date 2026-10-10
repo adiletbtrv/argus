@@ -1,5 +1,4 @@
-// ASSUMPTION: Clean C++ implementation without Arduino or standard library dependencies.
-// ASSUMPTION: Debounce timing relies on monotonic nowMs timestamps supplied by the caller.
+// Реализация фильтрации и гистерезиса для определения поворота трости.
 
 #include "direction_logic.h"
 
