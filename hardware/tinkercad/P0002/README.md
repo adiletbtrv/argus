@@ -31,10 +31,10 @@ void loop() {
   digitalWrite(TRIG_PIN, LOW);
 
   long duration = pulseIn(ECHO_PIN, HIGH);
-  int distance = duration * 0.034 / 2; // Перевод микросекунд в см
+  int distance = duration * 0.034 / 2; 
 
   if (distance < 20) {
-    digitalWrite(LED_PIN, HIGH); // Ближе 20 см — горит LED
+    digitalWrite(LED_PIN, HIGH); 
   } else {
     digitalWrite(LED_PIN, LOW);
   }
