@@ -1,3 +1,4 @@
 [wokwi]
 version = 1
-sketch = "sketch.ino"
+firmware = "build/wokwi.ino.hex"
+elf = "build/wokwi.ino.elf"

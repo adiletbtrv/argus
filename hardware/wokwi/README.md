@@ -33,13 +33,19 @@
 ### В браузере (Wokwi Web)
 1. Откройте [wokwi.com](https://wokwi.com) и создайте новый проект Arduino Nano.
 2. Замените содержимое `diagram.json` на файл из этой папки.
-3. Скопируйте `sketch.ino`, `direction_logic.h` и `direction_logic.cpp` как вкладки.
+3. Скопируйте `wokwi.ino`, `direction_logic.h` и `direction_logic.cpp` как вкладки.
 4. Нажмите Play.
 
 ### В VS Code (расширение Wokwi)
 1. Установите расширение [Wokwi Simulator](https://marketplace.visualstudio.com/items?itemName=Wokwi.wokwi-vscode).
-2. Откройте папку `hardware/wokwi/` как рабочую директорию.
-3. Нажмите Ctrl+Shift+P -> "Wokwi: Start Simulator".
+2. Скомпилированная прошивка уже лежит в папке `build/` (`wokwi.ino.hex` и `wokwi.ino.elf`).
+3. Откройте папку `hardware/wokwi/` в VS Code.
+4. Нажмите `Ctrl+Shift+P` -> **Wokwi: Start Simulator** (или откройте `diagram.json`).
+
+### Пересборка скетча (при изменении кода)
+```bash
+arduino-cli compile --fqbn arduino:avr:nano --output-dir build .
+```
 
 ## Сценарий тестирования
 
@@ -53,9 +59,10 @@
 
 | Файл | Назначение |
 |:---|:---|
-| `sketch.ino` | Скетч стенда (отдельный от основной прошивки) |
+| `wokwi.ino` | Скетч стенда (отдельный от основной прошивки) |
 | `diagram.json` | Схема подключения компонентов |
 | `direction_logic.h` | Копия заголовка классификатора из firmware/ |
 | `direction_logic.cpp` | Копия реализации классификатора из firmware/ |
-| `wokwi.toml` | Конфигурация для VS Code расширения |
+| `wokwi.toml` | Конфигурация для VS Code расширения (указывает на `build/wokwi.ino.hex`) |
+| `build/` | Скомпилированные бинарники (`.hex`, `.elf`) для немедленного запуска |
 | `libraries.txt` | Зависимости (пустой, внешние библиотеки не нужны) |
