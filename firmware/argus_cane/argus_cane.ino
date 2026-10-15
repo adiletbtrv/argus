@@ -1,7 +1,7 @@
-// Основная прошивка умной трости Argus.
-// Датчик положения MPU6050 (0x68), дешифратор 74HC138,
-// ультразвуковой датчик расстояния RCWL-9610A (HC-SR04),
-// виброотклик (PWM D9) и односторонняя Bluetooth-телеметрия HC-05 (TX D11).
+// основная прошивка умной трости Argus
+// датчик положения MPU6050 (0x68), дешифратор 74HC138
+// ультразвуковой датчик расстояния RCWL-9610A (HC-SR04)
+// виброотклик (PWM D9) и односторонняя Bluetooth телеметрия HC-05 (TX D11)
 
 #include <Wire.h>
 #include <SoftwareSerial.h>
@@ -12,26 +12,26 @@
 #include "../direction_logic/direction_logic.cpp"
 #endif
 
-// Пины управления КМОП-дешифратором 74HC138
-const int PIN_A = 2; // Адресный вход A (бит 0)
-const int PIN_B = 3; // Адресный вход B (бит 1)
-const int PIN_C = 4; // Адресный вход C (бит 2, зафиксирован в LOW для Y0..Y3)
+// пины управления 74HC138
+const int PIN_A = 2; // адресный вход A (бит 0)
+const int PIN_B = 3; // адресный вход B (бит 1)
+const int PIN_C = 4; // адресный вход C (бит 2, зафиксирован в LOW для Y0..Y3)
 
-// Пины ультразвукового датчика расстояния RCWL-9610A (HC-SR04)
-const int PIN_TRIG = 5; // Сигнал запуска измерения (Trig)
-const int PIN_ECHO = 6; // Вход эхо-импульса (Echo)
+// пины ультразвукового датчика расстояния RCWL-9610A (HC-SR04)
+const int PIN_TRIG = 5; // сигнал запуска измерения (Trig)
+const int PIN_ECHO = 6; // вход эхо-импульса (Echo)
 
-// Управление вибромоторчиком (ШИМ через NPN-транзистор)
+// управление вибромоторчиком (ШИМ через NPN транзистор)
 const int PIN_VIBRO = 9;
 
-// Пины модуля Bluetooth HC-05 (SoftwareSerial)
-// Аппаратные пины D0/D1 сохранены для USB-отладки (Serial Monitor)
-const int BT_RX_PIN = 10; // Не используется для приема (односторонняя телеметрия)
+// пины модуля Bluetooth HC-05 (SoftwareSerial)
+// аппаратные пины D0/D1 сохранены для USB отладки (Serial Monitor)
+const int BT_RX_PIN = 10; // не используется для приема (односторонняя телеметрия)
 const int BT_TX_PIN = 11; // TX Arduino к RX HC-05 через делитель напряжения (1к / 2к)
 
-// Параметры обнаружения препятствий и виброотклика
-const long OBSTACLE_THRESHOLD_CM = 50; // Порог дистанции для тактильного сигнала (см)
-const int VIBRO_INTENSITY = 255;       // Интенсивность вибрации
+// параметры обнаружения препятствий и виброотклика
+const long OBSTACLE_THRESHOLD_CM = 50; // порог дистанции для тактильного сигнала (см)
+const int VIBRO_INTENSITY = 255;       // интенсивность вибрации
 
 SoftwareSerial btSerial(BT_RX_PIN, BT_TX_PIN);
 MPU6050 mpu(Wire);
@@ -48,11 +48,11 @@ long readDistanceCm() {
   delayMicroseconds(10);
   digitalWrite(PIN_TRIG, LOW);
 
-  unsigned long duration = pulseIn(PIN_ECHO, HIGH, 25000); // таймаут ~4.3 м
+  unsigned long duration = pulseIn(PIN_ECHO, HIGH, 25000); // таймаут примерно 4.3 м
   if (duration == 0) {
-    return -1; // Препятствие вне зоны обнаружения
+    return -1; // препятствие вне зоны обнаружения
   }
-  return duration / 58; // Дистанция в см
+  return duration / 58; // дистанция в см
 }
 
 const char* getDirectionString(Direction dir) {
@@ -64,7 +64,7 @@ const char* getDirectionString(Direction dir) {
   }
 }
 
-// Трость не принимает команды извне: вибрация и LED управляются только локальными датчиками, Bluetooth используется исключительно для исходящей телеметрии.
+// трость не принимает команды извне: вибрация и LED управляются только локальными датчиками, Bluetooth используется только для исходящей телеметрии
 void sendTelemetry(long distCm, Direction dir) {
   btSerial.print(F("DIST:"));
   btSerial.print(distCm);
@@ -75,19 +75,19 @@ void sendTelemetry(long distCm, Direction dir) {
 void applyDirectionOutputs(Direction dir) {
   switch (dir) {
     case Direction::CENTER:
-      // Код 00 (CBA = 000) -> активен выход Y0 (светодиоды выключены)
+      // код 00 (CBA = 000) -> активен выход Y0 (светодиоды выключены)
       digitalWrite(PIN_A, LOW);
       digitalWrite(PIN_B, LOW);
       break;
 
     case Direction::LEFT:
-      // Код 01 (CBA = 001) -> активен выход Y1 (включает левый светодиод)
+      // код 01 (CBA = 001) -> активен выход Y1 (включает левый светодиод)
       digitalWrite(PIN_A, HIGH);
       digitalWrite(PIN_B, LOW);
       break;
 
     case Direction::RIGHT:
-      // Код 10 (CBA = 010) -> активен выход Y2 (включает правый светодиод)
+      // код 10 (CBA = 010) -> активен выход Y2 (включает правый светодиод)
       digitalWrite(PIN_A, LOW);
       digitalWrite(PIN_B, HIGH);
       break;
@@ -97,10 +97,10 @@ void applyDirectionOutputs(Direction dir) {
 void setup() {
   Serial.begin(9600);
   btSerial.begin(9600);
-  btSerial.stopListening(); // Отключаем прерывания RX: трость только передает, входящие байты игнорируются
+  btSerial.stopListening(); // отключаем прерывания RX: трость только передает, входящие байты игнорируются
   Wire.begin();
 
-  // Настройка выходов дешифратора 74HC138
+  // настройка выходов 74HC138
   pinMode(PIN_A, OUTPUT);
   pinMode(PIN_B, OUTPUT);
   pinMode(PIN_C, OUTPUT);
@@ -109,12 +109,12 @@ void setup() {
   digitalWrite(PIN_B, LOW);
   digitalWrite(PIN_C, LOW);
 
-  // Настройка ультразвукового датчика расстояния
+  // настройка ультразвукового датчика расстояния
   pinMode(PIN_TRIG, OUTPUT);
   pinMode(PIN_ECHO, INPUT);
   digitalWrite(PIN_TRIG, LOW);
 
-  // Настройка вывода вибромоторчика
+  // настройка вывода вибромоторчика
   pinMode(PIN_VIBRO, OUTPUT);
   analogWrite(PIN_VIBRO, 0);
 
@@ -129,14 +129,14 @@ void setup() {
     }
   }
 
-  // При калибровке трость должна стоять вертикально и неподвижно
+  // при калибровке трость должна стоять вертикально и неподвижно
   Serial.println(F("Калибровка гироскопа и акселерометра MPU6050..."));
   mpu.calcOffsets();
   Serial.println(F("Готово к работе."));
 }
 
 void loop() {
-  // Опрос датчика положения и классификация направления поворота
+  // опрос датчика положения и классификация направления поворота
   mpu.update();
   float roll = mpu.getAngleX();
   Direction currentDir = classifier.classify(roll, millis());
@@ -152,21 +152,21 @@ void loop() {
     Serial.println(F(" deg"));
   }
 
-  // Опрос локального датчика расстояния RCWL-9610A и управление вибромотором (прототип P0002)
+  // опрос RCWL-9610A и управление вибромотором (прототип P0002)
   unsigned long now = millis();
   if (now - lastDistanceCheckMs >= DISTANCE_CHECK_INTERVAL_MS) {
     lastDistanceCheckMs = now;
     long dist = readDistanceCm();
 
     if (dist > 0 && dist <= OBSTACLE_THRESHOLD_CM) {
-      // Препятствие обнаружено ближе порогового расстояния:
-      // 1. Активация вибромотора через транзистор (локальный тактильный контур)
+      // препятствие обнаружено ближе порогового расстояния:
+      // 1. активация вибромотора через транзистор
       analogWrite(PIN_VIBRO, VIBRO_INTENSITY);
 
-      // 2. Исходящая односторонняя телеметрия на смартфон
+      // 2. исходящая односторонняя телеметрия на смартфон
       sendTelemetry(dist, currentDir);
     } else {
-      // Препятствие отсутствует или дальше порога
+      // препятствие отсутствует или дальше порога
       analogWrite(PIN_VIBRO, 0);
     }
   }
