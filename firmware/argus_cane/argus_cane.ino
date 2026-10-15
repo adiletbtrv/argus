@@ -64,7 +64,7 @@ const char* getDirectionString(Direction dir) {
   }
 }
 
-// Трость не принимает команды извне — вибрация и LED управляются только локальными датчиками, Bluetooth используется исключительно для исходящей телеметрии.
+// Трость не принимает команды извне: вибрация и LED управляются только локальными датчиками, Bluetooth используется исключительно для исходящей телеметрии.
 void sendTelemetry(long distCm, Direction dir) {
   btSerial.print(F("DIST:"));
   btSerial.print(distCm);
