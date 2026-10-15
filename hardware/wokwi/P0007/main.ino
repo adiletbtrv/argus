@@ -10,8 +10,8 @@
 const int BUTTON_PIN = 2;   // кнопка (D2), будущая калибровка по issue #11
 const int BUILTIN_LED = 13; // встроенный светодиод Nano
 
-const int TRIG_PIN = 4; // HC-SR04 TRIG
-const int ECHO_PIN = 5; // HC-SR04 ECHO
+const int TRIG_PIN = 5; // HC-SR04 TRIG
+const int ECHO_PIN = 6; // HC-SR04 ECHO
 const int TILT_POT_PIN =
     A0; // потенциометр: имитация крена (-45 ... +45 градусов)
 

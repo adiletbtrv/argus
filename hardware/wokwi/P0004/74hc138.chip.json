@@ -1,0 +1,11 @@
+{
+  "name": "74hc138",
+  "author": "Argus Hardware Team",
+  "pins": [
+    "A", "B", "C",
+    "G2A", "G2B", "G1",
+    "Y7", "GND",
+    "Y6", "Y5", "Y4", "Y3", "Y2", "Y1", "Y0",
+    "VCC"
+  ]
+}

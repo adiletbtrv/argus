@@ -1,0 +1,195 @@
+{
+  "version": 1,
+  "author": "Argus Hardware Team",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-arduino-nano",
+      "id": "nano",
+      "top": 180,
+      "left": 160,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot",
+      "top": -40,
+      "left": 185,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_left",
+      "top": 310,
+      "left": 80,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_center",
+      "top": 310,
+      "left": 210,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_right",
+      "top": 310,
+      "left": 340,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_left",
+      "top": 370,
+      "left": 90,
+      "attrs": {
+        "color": "green",
+        "label": "LEFT (D8)"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_center",
+      "top": 370,
+      "left": 220,
+      "attrs": {
+        "color": "yellow",
+        "label": "CENTER (D9)"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_right",
+      "top": 370,
+      "left": 350,
+      "attrs": {
+        "color": "blue",
+        "label": "RIGHT (D10)"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "pot:VCC",
+      "nano:5V",
+      "red",
+      [
+        "v85",
+        "h65"
+      ]
+    ],
+    [
+      "pot:GND",
+      "nano:GND.1",
+      "black",
+      [
+        "v100",
+        "h90"
+      ]
+    ],
+    [
+      "pot:SIG",
+      "nano:A0",
+      "orange",
+      [
+        "v115",
+        "h0"
+      ]
+    ],
+    [
+      "nano:8",
+      "r_left:1",
+      "green",
+      [
+        "v-25",
+        "h-115",
+        "v120"
+      ]
+    ],
+    [
+      "r_left:2",
+      "led_left:A",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "led_left:C",
+      "nano:GND.2",
+      "black",
+      [
+        "v30",
+        "h195",
+        "v-170"
+      ]
+    ],
+    [
+      "nano:9",
+      "r_center:1",
+      "gold",
+      [
+        "v-35",
+        "h25",
+        "v130"
+      ]
+    ],
+    [
+      "r_center:2",
+      "led_center:A",
+      "gold",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "led_center:C",
+      "nano:GND.2",
+      "black",
+      [
+        "v30",
+        "h65",
+        "v-170"
+      ]
+    ],
+    [
+      "nano:10",
+      "r_right:1",
+      "blue",
+      [
+        "v-45",
+        "h165",
+        "v140"
+      ]
+    ],
+    [
+      "r_right:2",
+      "led_right:A",
+      "blue",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "led_right:C",
+      "nano:GND.2",
+      "black",
+      [
+        "v30",
+        "h-65",
+        "v-170"
+      ]
+    ]
+  ],
+  "dependencies": {}
+}

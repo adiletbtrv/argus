@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "author": "Argus Hardware Team",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-arduino-nano",
+      "id": "nano",
+      "top": 160,
+      "left": 60,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_top",
+      "top": 100,
+      "left": 300,
+      "rotate": 90,
+      "attrs": {
+        "value": "1000"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_bottom",
+      "top": 220,
+      "left": 300,
+      "rotate": 90,
+      "attrs": {
+        "value": "2000"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_led",
+      "top": 160,
+      "left": 410,
+      "rotate": 90,
+      "attrs": {
+        "value": "470"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_data",
+      "top": 230,
+      "left": 420,
+      "attrs": {
+        "color": "green",
+        "label": "TX 3.3V Node"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "nano:11",
+      "r_top:1",
+      "blue",
+      [
+        "v-75",
+        "h155"
+      ]
+    ],
+    [
+      "r_top:2",
+      "r_bottom:1",
+      "orange",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "r_bottom:2",
+      "nano:GND.2",
+      "black",
+      [
+        "v25",
+        "h-140",
+        "v-50"
+      ]
+    ],
+    [
+      "r_top:2",
+      "r_led:1",
+      "orange",
+      [
+        "v20",
+        "h110"
+      ]
+    ],
+    [
+      "r_led:2",
+      "led_data:A",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "led_data:C",
+      "nano:GND.2",
+      "black",
+      [
+        "v15",
+        "h-250",
+        "v-50"
+      ]
+    ]
+  ],
+  "dependencies": {}
+}

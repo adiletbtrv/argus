@@ -20,7 +20,9 @@ build/
 .arduino/
 
 # Pre-compiled Wokwi simulation firmware
-!hardware/wokwi/build/
-hardware/wokwi/build/*
-!hardware/wokwi/build/wokwi.ino.hex
-!hardware/wokwi/build/wokwi.ino.elf
+!hardware/wokwi/*/build/
+hardware/wokwi/*/build/*
+!hardware/wokwi/*/build/*.hex
+hardware/wokwi/*/build/*.with_bootloader.hex
+!hardware/wokwi/*/build/*.elf
+!hardware/wokwi/*/*.wasm
