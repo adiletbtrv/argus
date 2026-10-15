@@ -34,8 +34,8 @@
 | Пин Nano | Компонент | Назначение |
 |:---|:---|:---|
 | D2 | Кнопка (INPUT_PULLUP) | Зарезервирована под калибровку (issue #11) |
-| D4 | HC-SR04 TRIG | Запуск ультразвукового импульса |
-| D5 | HC-SR04 ECHO | Прием отраженного эхо-импульса |
+| D5 | HC-SR04 TRIG | Запуск ультразвукового импульса (строго D5) |
+| D6 | HC-SR04 ECHO | Прием отраженного эхо-импульса (строго D6) |
 | D8 | LED (зеленый) | Индикация поворота влево (LEFT) |
 | D9 | LED (желтый) | Индикация движения прямо (CENTER) |
 | D10 | LED (синий) | Индикация поворота вправо (RIGHT) |
@@ -49,15 +49,15 @@
 
 ## Исходный код (C++)
 
-Основной код стенда расположен в файле [`wokwi.ino`](wokwi.ino) и использует модуль [`direction_logic`](direction_logic.h):
+Основной код стенда расположен в файле [`main.ino`](main.ino) и использует модуль [`direction_logic`](direction_logic.h):
 
 ```cpp
 #include "direction_logic.h"
 
 const int BUTTON_PIN = 2;
 const int BUILTIN_LED = 13;
-const int TRIG_PIN = 4;
-const int ECHO_PIN = 5;
+const int TRIG_PIN = 5;
+const int ECHO_PIN = 6;
 const int TILT_POT_PIN = A0;
 
 const int LED_LEFT = 8;
@@ -66,7 +66,7 @@ const int LED_RIGHT = 10;
 const int BUZZER_PIN = 11;
 
 DirectionClassifier classifier;
-// ... (полный код см. в wokwi.ino)
+// ... (полный код см. в main.ino)
 ```
 
 ---
@@ -75,14 +75,14 @@ DirectionClassifier classifier;
 
 ### В VS Code (расширение Wokwi)
 1. Установите расширение [Wokwi Simulator](https://marketplace.visualstudio.com/items?itemName=Wokwi.wokwi-vscode).
-2. Скомпилированная прошивка уже входит в каталог `build/` (`wokwi.ino.hex` и `wokwi.ino.elf`).
+2. Скомпилированная прошивка уже входит в каталог `build/` (`main.ino.hex` и `main.ino.elf`).
 3. Откройте файл `diagram.json` в VS Code.
 4. Нажмите `Ctrl+Shift+P` → **Wokwi: Start Simulator** (или зеленую кнопку запуска в редакторе схемы).
 
 ### В браузере (Wokwi Web)
 1. Откройте [wokwi.com](https://wokwi.com) и выберите проект Arduino Nano.
 2. Скопируйте содержимое `diagram.json` во вкладку схемы.
-3. Добавьте файлы `wokwi.ino`, `direction_logic.h` и `direction_logic.cpp` во вкладки проекта.
+3. Добавьте файлы `main.ino`, `direction_logic.h` и `direction_logic.cpp` во вкладки проекта.
 4. Нажмите Play.
 
 ---
@@ -102,10 +102,10 @@ DirectionClassifier classifier;
 | Файл | Описание |
 |:---|:---|
 | `P0007.png` | Скриншот схемы подключения прототипа |
-| `wokwi.ino` | Скетч симулятора для Arduino Nano |
+| `main.ino` | Скетч симулятора для Arduino Nano |
 | `diagram.json` | Схема компонентов и соединений Wokwi |
 | `direction_logic.h` | Заголовок алгоритма классификации направления |
 | `direction_logic.cpp` | Реализация фильтра крена, гистерезиса и задержек |
 | `wokwi.toml` | Конфигурационный файл для запуска Wokwi в VS Code |
-| `build/` | Предварительно собранные бинарники (`wokwi.ino.hex`, `wokwi.ino.elf`) |
+| `build/` | Предварительно собранные бинарники (`main.ino.hex`, `main.ino.elf`) |
 | `libraries.txt` | Список внешних зависимостей (не требуются) |

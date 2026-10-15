@@ -1,66 +1,195 @@
 {
   "version": 1,
-  "author": "Argus Hardware Team",
+  "author": "Argus Hardware Team - Pro Refactor",
   "editor": "wokwi",
   "parts": [
     {
       "type": "wokwi-arduino-nano",
       "id": "nano",
-      "top": 150,
-      "left": 100,
+      "top": 240,
+      "left": -20,
       "attrs": {}
     },
     {
       "type": "chip-74hc138",
       "id": "decoder",
-      "top": 140,
-      "left": 340,
+      "top": 60,
+      "left": 210,
       "attrs": {}
     },
     {
       "type": "wokwi-resistor",
       "id": "r_left",
-      "top": 50,
-      "left": 280,
-      "attrs": { "value": "470" }
+      "top": -50,
+      "left": 350,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
     },
     {
       "type": "wokwi-resistor",
       "id": "r_right",
-      "top": 50,
-      "left": 420,
-      "attrs": { "value": "470" }
+      "top": -50,
+      "left": 430,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
     },
     {
       "type": "wokwi-led",
       "id": "led_left",
-      "top": 80,
-      "left": 290,
-      "attrs": { "color": "orange", "label": "LED LEFT (Y1)" }
+      "top": 20,
+      "left": 360,
+      "attrs": {
+        "color": "green",
+        "label": "LEFT (/Y1)"
+      }
     },
     {
       "type": "wokwi-led",
       "id": "led_right",
-      "top": 80,
-      "left": 430,
-      "attrs": { "color": "yellow", "label": "LED RIGHT (Y2)" }
+      "top": 20,
+      "left": 440,
+      "attrs": {
+        "color": "blue",
+        "label": "RIGHT (/Y2)"
+      }
     }
   ],
   "connections": [
-    [ "nano:5V", "decoder:VCC", "red", [ "v0" ] ],
-    [ "nano:5V", "decoder:G1", "red", [ "v0" ] ],
-    [ "nano:GND.1", "decoder:GND", "black", [ "v0" ] ],
-    [ "nano:GND.1", "decoder:G2A", "black", [ "v0" ] ],
-    [ "nano:GND.1", "decoder:G2B", "black", [ "v0" ] ],
-    [ "nano:2", "decoder:A", "blue", [ "v0" ] ],
-    [ "nano:3", "decoder:B", "blue", [ "v0" ] ],
-    [ "nano:4", "decoder:C", "blue", [ "v0" ] ],
-    [ "nano:5V", "r_left:1", "red", [ "v0" ] ],
-    [ "nano:5V", "r_right:1", "red", [ "v0" ] ],
-    [ "r_left:2", "led_left:A", "green", [ "v0" ] ],
-    [ "r_right:2", "led_right:A", "orange", [ "v0" ] ],
-    [ "decoder:Y1", "led_left:C", "green", [ "v0" ] ],
-    [ "decoder:Y2", "led_right:C", "orange", [ "v0" ] ]
+    [
+      "nano:5V",
+      "decoder:VCC",
+      "red",
+      [
+        "v30",
+        "h115",
+        "v-230"
+      ]
+    ],
+    [
+      "nano:5V",
+      "decoder:G1",
+      "red",
+      [
+        "v30",
+        "h65",
+        "v-175"
+      ]
+    ],
+    [
+      "nano:5V",
+      "r_left:1",
+      "red",
+      [
+        "v30",
+        "h285",
+        "v-365"
+      ]
+    ],
+    [
+      "nano:5V",
+      "r_right:1",
+      "red",
+      [
+        "v30",
+        "h365",
+        "v-365"
+      ]
+    ],
+    [
+      "nano:GND.1",
+      "decoder:GND",
+      "black",
+      [
+        "v45",
+        "h80",
+        "v-165"
+      ]
+    ],
+    [
+      "nano:GND.1",
+      "decoder:G2A",
+      "black",
+      [
+        "v45",
+        "h40",
+        "v-210"
+      ]
+    ],
+    [
+      "nano:GND.1",
+      "decoder:G2B",
+      "black",
+      [
+        "v45",
+        "h40",
+        "v-200"
+      ]
+    ],
+    [
+      "nano:2",
+      "decoder:A",
+      "gold",
+      [
+        "v-125",
+        "h90"
+      ]
+    ],
+    [
+      "nano:3",
+      "decoder:B",
+      "orange",
+      [
+        "v-115",
+        "h105"
+      ]
+    ],
+    [
+      "nano:4",
+      "decoder:C",
+      "cyan",
+      [
+        "v-105",
+        "h120"
+      ]
+    ],
+    [
+      "r_left:2",
+      "led_left:A",
+      "red",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "r_right:2",
+      "led_right:A",
+      "red",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "decoder:Y1",
+      "led_left:C",
+      "limegreen",
+      [
+        "h65",
+        "v-15"
+      ]
+    ],
+    [
+      "decoder:Y2",
+      "led_right:C",
+      "dodgerblue",
+      [
+        "h145",
+        "v-25"
+      ]
+    ]
   ],
   "dependencies": {}
 }

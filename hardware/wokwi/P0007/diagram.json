@@ -15,7 +15,9 @@
       "id": "sonar",
       "top": -70,
       "left": 170,
-      "attrs": { "distance": "80" }
+      "attrs": {
+        "distance": "80"
+      }
     },
     {
       "type": "wokwi-potentiometer",
@@ -36,7 +38,10 @@
       "id": "btn1",
       "top": 180,
       "left": 40,
-      "attrs": { "color": "yellow", "label": "CALIBRATE" }
+      "attrs": {
+        "color": "yellow",
+        "label": "CALIBRATE (D2)"
+      }
     },
     {
       "type": "wokwi-resistor",
@@ -44,7 +49,9 @@
       "top": 320,
       "left": 80,
       "rotate": 90,
-      "attrs": { "value": "220" }
+      "attrs": {
+        "value": "220"
+      }
     },
     {
       "type": "wokwi-resistor",
@@ -52,7 +59,9 @@
       "top": 320,
       "left": 230,
       "rotate": 90,
-      "attrs": { "value": "220" }
+      "attrs": {
+        "value": "220"
+      }
     },
     {
       "type": "wokwi-resistor",
@@ -60,69 +69,273 @@
       "top": 320,
       "left": 380,
       "rotate": 90,
-      "attrs": { "value": "220" }
+      "attrs": {
+        "value": "220"
+      }
     },
     {
       "type": "wokwi-led",
       "id": "led_left",
       "top": 380,
       "left": 90,
-      "attrs": { "color": "green", "label": "LEFT" }
+      "attrs": {
+        "color": "green",
+        "label": "LEFT (D8)"
+      }
     },
     {
       "type": "wokwi-led",
       "id": "led_center",
       "top": 380,
       "left": 240,
-      "attrs": { "color": "yellow", "label": "CENTER" }
+      "attrs": {
+        "color": "yellow",
+        "label": "CENTER (D9)"
+      }
     },
     {
       "type": "wokwi-led",
       "id": "led_right",
       "top": 380,
       "left": 390,
-      "attrs": { "color": "blue", "label": "RIGHT" }
+      "attrs": {
+        "color": "blue",
+        "label": "RIGHT (D10)"
+      }
     },
     {
       "type": "wokwi-buzzer",
       "id": "buzzer",
       "top": 330,
       "left": 500,
-      "attrs": { "volume": "0.15" }
+      "attrs": {
+        "volume": "0.15"
+      }
     }
   ],
   "connections": [
-    [ "sonar:VCC", "nano:5V", "red", [ "v80", "h75" ] ],
-    [ "sonar:GND", "nano:GND.1", "black", [ "v95", "h65" ] ],
-    [ "sonar:TRIG", "nano:4", "gold", [ "v115", "h70" ] ],
-    [ "sonar:ECHO", "nano:5", "cyan", [ "v125", "h50" ] ],
-
-    [ "tilt_sim:VCC", "nano:5V", "red", [ "v100", "h260" ] ],
-    [ "tilt_sim:GND", "nano:GND.1", "black", [ "v115", "h285" ] ],
-    [ "tilt_sim:SIG", "nano:A0", "orange", [ "v130", "h195" ] ],
-
-    [ "imu:VCC", "nano:5V", "red", [ "v100", "h-120" ] ],
-    [ "imu:GND", "nano:GND.1", "black", [ "v115", "h-95" ] ],
-    [ "imu:SDA", "nano:A4", "green", [ "v135", "h-155" ] ],
-    [ "imu:SCL", "nano:A5", "blue", [ "v145", "h-155" ] ],
-
-    [ "btn1:1.r", "nano:2", "gold", [ "h75", "v-15" ] ],
-    [ "btn1:2.r", "nano:GND.1", "black", [ "h60", "v40", "h190" ] ],
-
-    [ "nano:8", "r_left:1", "limegreen", [ "v-25", "h-135", "v120" ] ],
-    [ "r_left:2", "led_left:A", "limegreen", [ "v0" ] ],
-    [ "led_left:C", "nano:GND.2", "black", [ "v30", "h215", "v-170" ] ],
-
-    [ "nano:9", "r_center:1", "gold", [ "v-35", "h25", "v130" ] ],
-    [ "r_center:2", "led_center:A", "gold", [ "v0" ] ],
-    [ "led_center:C", "nano:GND.2", "black", [ "v30", "h65", "v-170" ] ],
-
-    [ "nano:10", "r_right:1", "dodgerblue", [ "v-45", "h185", "v140" ] ],
-    [ "r_right:2", "led_right:A", "dodgerblue", [ "v0" ] ],
-    [ "led_right:C", "nano:GND.2", "black", [ "v30", "h-85", "v-170" ] ],
-
-    [ "nano:11", "buzzer:2", "magenta", [ "v-55", "h340", "v180" ] ],
-    [ "buzzer:1", "nano:GND.2", "black", [ "v90", "h-195", "v-170" ] ]
+    [
+      "sonar:VCC",
+      "nano:5V",
+      "red",
+      [
+        "v80",
+        "h75"
+      ]
+    ],
+    [
+      "sonar:GND",
+      "nano:GND.1",
+      "black",
+      [
+        "v95",
+        "h65"
+      ]
+    ],
+    [
+      "sonar:TRIG",
+      "nano:5",
+      "gold",
+      [
+        "v115",
+        "h60"
+      ]
+    ],
+    [
+      "sonar:ECHO",
+      "nano:6",
+      "cyan",
+      [
+        "v125",
+        "h40"
+      ]
+    ],
+    [
+      "tilt_sim:VCC",
+      "nano:5V",
+      "red",
+      [
+        "v100",
+        "h260"
+      ]
+    ],
+    [
+      "tilt_sim:GND",
+      "nano:GND.1",
+      "black",
+      [
+        "v115",
+        "h285"
+      ]
+    ],
+    [
+      "tilt_sim:SIG",
+      "nano:A0",
+      "orange",
+      [
+        "v130",
+        "h195"
+      ]
+    ],
+    [
+      "imu:VCC",
+      "nano:5V",
+      "red",
+      [
+        "v100",
+        "h-120"
+      ]
+    ],
+    [
+      "imu:GND",
+      "nano:GND.1",
+      "black",
+      [
+        "v115",
+        "h-95"
+      ]
+    ],
+    [
+      "imu:SDA",
+      "nano:A4",
+      "green",
+      [
+        "v135",
+        "h-155"
+      ]
+    ],
+    [
+      "imu:SCL",
+      "nano:A5",
+      "blue",
+      [
+        "v145",
+        "h-155"
+      ]
+    ],
+    [
+      "btn1:1.r",
+      "nano:2",
+      "gold",
+      [
+        "h75",
+        "v-15"
+      ]
+    ],
+    [
+      "btn1:2.r",
+      "nano:GND.1",
+      "black",
+      [
+        "h60",
+        "v40",
+        "h190"
+      ]
+    ],
+    [
+      "nano:8",
+      "r_left:1",
+      "limegreen",
+      [
+        "v-25",
+        "h-135",
+        "v120"
+      ]
+    ],
+    [
+      "r_left:2",
+      "led_left:A",
+      "limegreen",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "led_left:C",
+      "nano:GND.2",
+      "black",
+      [
+        "v30",
+        "h215",
+        "v-170"
+      ]
+    ],
+    [
+      "nano:9",
+      "r_center:1",
+      "gold",
+      [
+        "v-35",
+        "h25",
+        "v130"
+      ]
+    ],
+    [
+      "r_center:2",
+      "led_center:A",
+      "gold",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "led_center:C",
+      "nano:GND.2",
+      "black",
+      [
+        "v30",
+        "h65",
+        "v-170"
+      ]
+    ],
+    [
+      "nano:10",
+      "r_right:1",
+      "dodgerblue",
+      [
+        "v-45",
+        "h185",
+        "v140"
+      ]
+    ],
+    [
+      "r_right:2",
+      "led_right:A",
+      "dodgerblue",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "led_right:C",
+      "nano:GND.2",
+      "black",
+      [
+        "v30",
+        "h-85",
+        "v-170"
+      ]
+    ],
+    [
+      "nano:11",
+      "buzzer:2",
+      "magenta",
+      [
+        "v-55",
+        "h340",
+        "v180"
+      ]
+    ],
+    [
+      "buzzer:1",
+      "nano:GND.2",
+      "black",
+      [
+        "v90",
+        "h-195",
+        "v-170"
+      ]
+    ]
   ],
   "dependencies": {}
 }

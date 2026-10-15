@@ -1,54 +1,93 @@
-// Прототип P0004: Дешифратор 74HC138 + Светодиоды поворотников (Active LOW)
-// Проверка таблицы истинности и аппаратной взаимоблокировки сигналов
-// Спецификация: argus/docs/truth_table.md и argus/docs/pinout.md
+// Прототип P0004 (PRO): Дешифратор 74HC138 + Светодиоды поворотников (Active
+// LOW) Аппаратная взаимоблокировка (Hardware Interlock) и защита от переходных
+// глитчей Спецификация: argus/docs/truth_table.md и argus/docs/pinout.md
 
-const int PIN_A = 2; // Адресный вход A (бит 0, LSB)
-const int PIN_B = 3; // Адресный вход B (бит 1)
-const int PIN_C = 4; // Адресный вход C (бит 2, MSB, зафиксирован LOW)
+#include <Arduino.h>
 
-void setAddress(int c, int b, int a) {
+constexpr uint8_t PIN_A = 2; // Адресный вход A (бит 0, LSB, PD2)
+constexpr uint8_t PIN_B = 3; // Адресный вход B (бит 1, PD3)
+constexpr uint8_t PIN_C = 4; // Адресный вход C (бит 2, MSB, PD4)
+
+constexpr unsigned long STATE_INTERVAL_MS = 2000;
+
+struct TestVector {
+  uint8_t c;
+  uint8_t b;
+  uint8_t a;
+  const char *activePin;
+  const char *description;
+};
+
+const TestVector TRUTH_TABLE[] = {
+    {0, 0, 0, "/Y0", "CENTER / STRAIGHT (All Turn LEDs OFF)"},
+    {0, 0, 1, "/Y1", "LEFT TURN         (LED LEFT ON - Sinking to GND)"},
+    {0, 1, 0, "/Y2", "RIGHT TURN        (LED RIGHT ON - Sinking to GND)"},
+    {0, 1, 1, "/Y3", "RESERVE CHANNEL   (NC - All Turn LEDs OFF)"}};
+
+constexpr size_t NUM_STATES = sizeof(TRUTH_TABLE) / sizeof(TRUTH_TABLE[0]);
+
+// Синхронная (атомарная) установка адреса на пинах D2, D3, D4 без переходных
+// глитчей
+void setAddressAtomic(uint8_t c, uint8_t b, uint8_t a) {
+#if defined(PORTD)
+  // Биты PD2 (пин 2), PD3 (пин 3), PD4 (пин 4) обновляются за 1 такт процессора
+  uint8_t mask = (1 << PD2) | (1 << PD3) | (1 << PD4);
+  uint8_t bits =
+      ((a & 0x01) << PD2) | ((b & 0x01) << PD3) | ((c & 0x01) << PD4);
+  uint8_t oldSREG = SREG;
+  noInterrupts();
+  PORTD = (PORTD & ~mask) | bits;
+  SREG = oldSREG;
+#else
   digitalWrite(PIN_C, c ? HIGH : LOW);
   digitalWrite(PIN_B, b ? HIGH : LOW);
   digitalWrite(PIN_A, a ? HIGH : LOW);
+#endif
+}
+
+void printStateReport(size_t index, const TestVector &tv) {
+  Serial.print(F("[STATE "));
+  Serial.print(index);
+  Serial.print(F("] CBA="));
+  Serial.print(tv.c);
+  Serial.print(tv.b);
+  Serial.print(tv.a);
+  Serial.print(F(" | Active(LOW): "));
+  Serial.print(tv.activePin);
+  Serial.print(F(" | "));
+  Serial.println(tv.description);
 }
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200); // Стандартная скорость профессиональной телеметрии
   pinMode(PIN_A, OUTPUT);
   pinMode(PIN_B, OUTPUT);
   pinMode(PIN_C, OUTPUT);
 
-  // Исходное состояние: CBA = 000 -> активен /Y0 (нейтраль, светодиоды выключены)
-  setAddress(0, 0, 0);
+  setAddressAtomic(0, 0, 0);
 
-  Serial.println(F("=================================================="));
-  Serial.println(F(" Argus P0004: 74HC138 Decoder Truth Table Testbench"));
-  Serial.println(F(" Hardware Interlock & Active-LOW Current Sinking  "));
-  Serial.println(F("=================================================="));
+  Serial.println(
+      F("============================================================="));
+  Serial.println(
+      F(" Argus P0004: 74HC138 Decoder Truth Table Testbench (PRO)    "));
+  Serial.println(
+      F(" Architecture: Active-LOW Current Sinking & Glitch-Free Port "));
+  Serial.println(
+      F("============================================================="));
+  printStateReport(0, TRUTH_TABLE[0]);
 }
 
 void loop() {
-  // Состояние 0: Нейтраль (CENTER / STRAIGHT)
-  // Входы: C=0, B=0, A=0 -> Выход /Y0 = LOW, остальные HIGH. Светодиоды выключены.
-  setAddress(0, 0, 0);
-  Serial.println(F("[STATE 0] Address: C=0 B=0 A=0 -> /Y0 Active (LOW) -> CENTER (LEDs OFF)"));
-  delay(2000);
+  static unsigned long lastSwitchMs = 0;
+  static size_t currentState = 0;
 
-  // Состояние 1: Поворот влево (LEFT)
-  // Входы: C=0, B=0, A=1 -> Выход /Y1 = LOW. Катод LED LEFT притянут к GND, диод светит.
-  setAddress(0, 0, 1);
-  Serial.println(F("[STATE 1] Address: C=0 B=0 A=1 -> /Y1 Active (LOW) -> LEFT TURN (LED LEFT ON)"));
-  delay(2000);
+  unsigned long now = millis();
+  if (now - lastSwitchMs >= STATE_INTERVAL_MS) {
+    lastSwitchMs = now;
+    currentState = (currentState + 1) % NUM_STATES;
 
-  // Состояние 2: Поворот вправо (RIGHT)
-  // Входы: C=0, B=1, A=0 -> Выход /Y2 = LOW. Катод LED RIGHT притянут к GND, диод светит.
-  setAddress(0, 1, 0);
-  Serial.println(F("[STATE 2] Address: C=0 B=1 A=0 -> /Y2 Active (LOW) -> RIGHT TURN (LED RIGHT ON)"));
-  delay(2000);
-
-  // Состояние 3: Резервный канал (RESERVE)
-  // Входы: C=0, B=1, A=1 -> Выход /Y3 = LOW (NC). Светодиоды выключены.
-  setAddress(0, 1, 1);
-  Serial.println(F("[STATE 3] Address: C=0 B=1 A=1 -> /Y3 Active (LOW) -> RESERVE (LEDs OFF)"));
-  delay(2000);
+    const TestVector &tv = TRUTH_TABLE[currentState];
+    setAddressAtomic(tv.c, tv.b, tv.a);
+    printStateReport(currentState, tv);
+  }
 }
