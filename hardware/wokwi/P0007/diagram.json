@@ -67,21 +67,21 @@
       "id": "led_left",
       "top": 380,
       "left": 90,
-      "attrs": { "color": "limegreen", "label": "LEFT" }
+      "attrs": { "color": "green", "label": "LEFT" }
     },
     {
       "type": "wokwi-led",
       "id": "led_center",
       "top": 380,
       "left": 240,
-      "attrs": { "color": "gold", "label": "CENTER" }
+      "attrs": { "color": "yellow", "label": "CENTER" }
     },
     {
       "type": "wokwi-led",
       "id": "led_right",
       "top": 380,
       "left": 390,
-      "attrs": { "color": "dodgerblue", "label": "RIGHT" }
+      "attrs": { "color": "blue", "label": "RIGHT" }
     },
     {
       "type": "wokwi-buzzer",

@@ -4,10 +4,6 @@
 
 #include "direction_logic.h"
 
-#if defined(ARDUINO) && !defined(ARGUS_SEPARATE_COMPILATION)
-#include "direction_logic.cpp"
-#endif
-
 const int POT_PIN = A0;
 const int LED_LEFT = 8;
 const int LED_CENTER = 9;

@@ -15,7 +15,7 @@
       "id": "pot",
       "top": 0,
       "left": 60,
-      "attrs": { "label": "TILT (-45°..+45°)" }
+      "attrs": {}
     },
     {
       "type": "wokwi-led",
@@ -64,9 +64,9 @@
     [ "pot:GND", "nano:GND.1", "black", [ "v0" ] ],
     [ "pot:VCC", "nano:5V", "red", [ "v0" ] ],
     [ "pot:SIG", "nano:A0", "orange", [ "v0" ] ],
-    [ "nano:D8", "led_left:A", "green", [ "v0" ] ],
-    [ "nano:D9", "led_center:A", "yellow", [ "v0" ] ],
-    [ "nano:D10", "led_right:A", "blue", [ "v0" ] ],
+    [ "nano:8", "led_left:A", "green", [ "v0" ] ],
+    [ "nano:9", "led_center:A", "yellow", [ "v0" ] ],
+    [ "nano:10", "led_right:A", "blue", [ "v0" ] ],
     [ "led_left:C", "r_left:1", "black", [ "v0" ] ],
     [ "led_center:C", "r_center:1", "black", [ "v0" ] ],
     [ "led_right:C", "r_right:1", "black", [ "v0" ] ],

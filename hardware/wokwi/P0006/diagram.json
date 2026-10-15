@@ -15,14 +15,14 @@
       "id": "r_top",
       "top": 100,
       "left": 280,
-      "attrs": { "value": "1000", "label": "R1 (1k)" }
+      "attrs": { "value": "1000" }
     },
     {
       "type": "wokwi-resistor",
       "id": "r_bottom",
       "top": 180,
       "left": 280,
-      "attrs": { "value": "2000", "label": "R2 (2k)" }
+      "attrs": { "value": "2000" }
     },
     {
       "type": "wokwi-led",
@@ -40,7 +40,7 @@
     }
   ],
   "connections": [
-    [ "nano:D11", "r_top:1", "blue", [ "v0" ] ],
+    [ "nano:11", "r_top:1", "blue", [ "v0" ] ],
     [ "r_top:2", "r_bottom:1", "orange", [ "v0" ] ],
     [ "r_bottom:2", "nano:GND.1", "black", [ "v0" ] ],
     [ "r_top:2", "led_data:A", "orange", [ "v0" ] ],

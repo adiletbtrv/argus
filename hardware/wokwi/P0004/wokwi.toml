@@ -1,3 +1,8 @@
 [wokwi]
 version = 1
-elf = ""
+firmware = "build/main.ino.hex"
+elf = "build/main.ino.elf"
+
+[[chip]]
+name = "74hc138"
+binary = "74hc138.chip.wasm"

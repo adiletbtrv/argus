@@ -11,7 +11,7 @@
       "attrs": {}
     },
     {
-      "type": "chip:74hc138",
+      "type": "chip-74hc138",
       "id": "decoder",
       "top": 140,
       "left": 340,
@@ -52,9 +52,9 @@
     [ "nano:GND.1", "decoder:GND", "black", [ "v0" ] ],
     [ "nano:GND.1", "decoder:G2A", "black", [ "v0" ] ],
     [ "nano:GND.1", "decoder:G2B", "black", [ "v0" ] ],
-    [ "nano:D2", "decoder:A", "blue", [ "v0" ] ],
-    [ "nano:D3", "decoder:B", "blue", [ "v0" ] ],
-    [ "nano:D4", "decoder:C", "blue", [ "v0" ] ],
+    [ "nano:2", "decoder:A", "blue", [ "v0" ] ],
+    [ "nano:3", "decoder:B", "blue", [ "v0" ] ],
+    [ "nano:4", "decoder:C", "blue", [ "v0" ] ],
     [ "nano:5V", "r_left:1", "red", [ "v0" ] ],
     [ "nano:5V", "r_right:1", "red", [ "v0" ] ],
     [ "r_left:2", "led_left:A", "green", [ "v0" ] ],
