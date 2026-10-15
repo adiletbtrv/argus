@@ -1,128 +1,128 @@
 {
   "version": 1,
-  "author": "Argus Smart Cane Team",
+  "author": "Argus Cane - Pro Nano Testbench",
   "editor": "wokwi",
   "parts": [
     {
       "type": "wokwi-arduino-nano",
       "id": "nano",
-      "top": 0,
-      "left": 0,
+      "top": 190,
+      "left": 180,
       "attrs": {}
     },
     {
       "type": "wokwi-hc-sr04",
       "id": "sonar",
-      "top": -160,
-      "left": 80,
-      "attrs": { "distance": "60" }
+      "top": -70,
+      "left": 170,
+      "attrs": { "distance": "80" }
     },
     {
-      "type": "wokwi-mpu6050",
-      "id": "mpu",
-      "top": -160,
-      "left": -120,
+      "type": "wokwi-potentiometer",
+      "id": "tilt_sim",
+      "top": -50,
+      "left": 10,
       "attrs": {}
     },
     {
-      "type": "wokwi-buzzer",
-      "id": "buzzer",
-      "top": 150,
-      "left": 120,
-      "attrs": { "volume": "0.5" }
+      "type": "wokwi-mpu6050",
+      "id": "imu",
+      "top": -50,
+      "left": 380,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn1",
+      "top": 180,
+      "left": 40,
+      "attrs": { "color": "yellow", "label": "CALIBRATE" }
     },
     {
       "type": "wokwi-resistor",
       "id": "r_left",
-      "top": -60,
-      "left": 160,
+      "top": 320,
+      "left": 80,
+      "rotate": 90,
+      "attrs": { "value": "220" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_center",
+      "top": 320,
+      "left": 230,
+      "rotate": 90,
+      "attrs": { "value": "220" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_right",
+      "top": 320,
+      "left": 380,
+      "rotate": 90,
       "attrs": { "value": "220" }
     },
     {
       "type": "wokwi-led",
       "id": "led_left",
-      "top": -60,
-      "left": 230,
-      "attrs": { "color": "green", "label": "LEFT" }
-    },
-    {
-      "type": "wokwi-resistor",
-      "id": "r_center",
-      "top": 0,
-      "left": 160,
-      "attrs": { "value": "220" }
+      "top": 380,
+      "left": 90,
+      "attrs": { "color": "limegreen", "label": "LEFT" }
     },
     {
       "type": "wokwi-led",
       "id": "led_center",
-      "top": 0,
-      "left": 230,
-      "attrs": { "color": "yellow", "label": "CENTER" }
-    },
-    {
-      "type": "wokwi-resistor",
-      "id": "r_right",
-      "top": 60,
-      "left": 160,
-      "attrs": { "value": "220" }
+      "top": 380,
+      "left": 240,
+      "attrs": { "color": "gold", "label": "CENTER" }
     },
     {
       "type": "wokwi-led",
       "id": "led_right",
-      "top": 60,
-      "left": 230,
-      "attrs": { "color": "blue", "label": "RIGHT" }
+      "top": 380,
+      "left": 390,
+      "attrs": { "color": "dodgerblue", "label": "RIGHT" }
     },
     {
-      "type": "wokwi-potentiometer",
-      "id": "tilt_sim",
-      "top": 140,
-      "left": -140,
-      "attrs": { "label": "Tilt Sim (A0)" }
-    },
-    {
-      "type": "wokwi-pushbutton",
-      "id": "btn1",
-      "top": 40,
-      "left": -140,
-      "attrs": { "color": "green", "label": "Calib (D2)" }
+      "type": "wokwi-buzzer",
+      "id": "buzzer",
+      "top": 330,
+      "left": 500,
+      "attrs": { "volume": "0.15" }
     }
   ],
   "connections": [
-    [ "nano:TX", "$serialMonitor:RX", "", [] ],
-    [ "nano:RX", "$serialMonitor:TX", "", [] ],
+    [ "sonar:VCC", "nano:5V", "red", [ "v80", "h75" ] ],
+    [ "sonar:GND", "nano:GND.1", "black", [ "v95", "h65" ] ],
+    [ "sonar:TRIG", "nano:4", "gold", [ "v115", "h70" ] ],
+    [ "sonar:ECHO", "nano:5", "cyan", [ "v125", "h50" ] ],
 
-    [ "sonar:VCC", "nano:5V", "red", [ "v0" ] ],
-    [ "sonar:GND", "nano:GND.1", "black", [ "v0" ] ],
-    [ "sonar:TRIG", "nano:5", "orange", [ "v0" ] ],
-    [ "sonar:ECHO", "nano:6", "green", [ "v0" ] ],
+    [ "tilt_sim:VCC", "nano:5V", "red", [ "v100", "h260" ] ],
+    [ "tilt_sim:GND", "nano:GND.1", "black", [ "v115", "h285" ] ],
+    [ "tilt_sim:SIG", "nano:A0", "orange", [ "v130", "h195" ] ],
 
-    [ "mpu:VCC", "nano:5V", "red", [ "v0" ] ],
-    [ "mpu:GND", "nano:GND.1", "black", [ "v0" ] ],
-    [ "mpu:SDA", "nano:A4", "blue", [ "v0" ] ],
-    [ "mpu:SCL", "nano:A5", "yellow", [ "v0" ] ],
+    [ "imu:VCC", "nano:5V", "red", [ "v100", "h-120" ] ],
+    [ "imu:GND", "nano:GND.1", "black", [ "v115", "h-95" ] ],
+    [ "imu:SDA", "nano:A4", "green", [ "v135", "h-155" ] ],
+    [ "imu:SCL", "nano:A5", "blue", [ "v145", "h-155" ] ],
 
-    [ "buzzer:2", "nano:9", "purple", [ "v0" ] ],
-    [ "buzzer:1", "nano:GND.1", "black", [ "v0" ] ],
+    [ "btn1:1.r", "nano:2", "gold", [ "h75", "v-15" ] ],
+    [ "btn1:2.r", "nano:GND.1", "black", [ "h60", "v40", "h190" ] ],
 
-    [ "nano:7", "r_left:1", "green", [ "v0" ] ],
-    [ "r_left:2", "led_left:A", "green", [ "v0" ] ],
-    [ "led_left:C", "nano:GND.2", "black", [ "v0" ] ],
+    [ "nano:8", "r_left:1", "limegreen", [ "v-25", "h-135", "v120" ] ],
+    [ "r_left:2", "led_left:A", "limegreen", [ "v0" ] ],
+    [ "led_left:C", "nano:GND.2", "black", [ "v30", "h215", "v-170" ] ],
 
-    [ "nano:8", "r_center:1", "yellow", [ "v0" ] ],
-    [ "r_center:2", "led_center:A", "yellow", [ "v0" ] ],
-    [ "led_center:C", "nano:GND.2", "black", [ "v0" ] ],
+    [ "nano:9", "r_center:1", "gold", [ "v-35", "h25", "v130" ] ],
+    [ "r_center:2", "led_center:A", "gold", [ "v0" ] ],
+    [ "led_center:C", "nano:GND.2", "black", [ "v30", "h65", "v-170" ] ],
 
-    [ "nano:12", "r_right:1", "blue", [ "v0" ] ],
-    [ "r_right:2", "led_right:A", "blue", [ "v0" ] ],
-    [ "led_right:C", "nano:GND.2", "black", [ "v0" ] ],
+    [ "nano:10", "r_right:1", "dodgerblue", [ "v-45", "h185", "v140" ] ],
+    [ "r_right:2", "led_right:A", "dodgerblue", [ "v0" ] ],
+    [ "led_right:C", "nano:GND.2", "black", [ "v30", "h-85", "v-170" ] ],
 
-    [ "tilt_sim:VCC", "nano:5V", "red", [ "v0" ] ],
-    [ "tilt_sim:GND", "nano:GND.1", "black", [ "v0" ] ],
-    [ "tilt_sim:SIG", "nano:A0", "cyan", [ "v0" ] ],
-
-    [ "btn1:2.l", "nano:2", "green", [ "v0" ] ],
-    [ "btn1:1.l", "nano:GND.2", "black", [ "v0" ] ]
+    [ "nano:11", "buzzer:2", "magenta", [ "v-55", "h340", "v180" ] ],
+    [ "buzzer:1", "nano:GND.2", "black", [ "v90", "h-195", "v-170" ] ]
   ],
   "dependencies": {}
 }
