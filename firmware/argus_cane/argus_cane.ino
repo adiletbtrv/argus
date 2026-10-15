@@ -3,19 +3,59 @@
 // ультразвуковой датчик расстояния RCWL-9610A (HC-SR04)
 // виброотклик (PWM D9) и односторонняя Bluetooth телеметрия HC-05 (TX D11)
 
+// Режим симуляции в Wokwi (прямое управление светодиодами на D7, D8, D12 без 74HC138).
+// Для запуска в Wokwi раскомментируйте макрос ниже или задайте флаг при компиляции:
+// #define WOKWI_SIMULATION
+
 #include <Wire.h>
 #include <SoftwareSerial.h>
 #include <MPU6050_light.h>
-#include "../direction_logic/direction_logic.h"
 
-#if defined(ARDUINO) && !defined(ARGUS_SEPARATE_COMPILATION)
-#include "../direction_logic/direction_logic.cpp"
+#if defined(__has_include)
+  #if __has_include("direction_logic.h")
+    #include "direction_logic.h"
+  #elif __has_include("../direction_logic/direction_logic.h")
+    #include "../direction_logic/direction_logic.h"
+  #else
+    #include "direction_logic.h"
+  #endif
+#else
+  #if defined(WOKWI_SIMULATION)
+    #include "direction_logic.h"
+  #else
+    #include "../direction_logic/direction_logic.h"
+  #endif
 #endif
 
+#if defined(ARDUINO) && !defined(ARGUS_SEPARATE_COMPILATION)
+  #if defined(__has_include)
+    #if __has_include("direction_logic.cpp")
+      #include "direction_logic.cpp"
+    #elif __has_include("../direction_logic/direction_logic.cpp")
+      #include "../direction_logic/direction_logic.cpp"
+    #else
+      #include "direction_logic.cpp"
+    #endif
+  #else
+    #if defined(WOKWI_SIMULATION)
+      #include "direction_logic.cpp"
+    #else
+      #include "../direction_logic/direction_logic.cpp"
+    #endif
+  #endif
+#endif
+
+#if defined(WOKWI_SIMULATION)
+// прямое подключение светодиодов в симуляторе Wokwi
+const int PIN_LED_LEFT = 7;     // левый поворотник (зеленый LED)
+const int PIN_LED_CENTER = 8;   // центральное положение (желтый LED)
+const int PIN_LED_RIGHT = 12;   // правый поворотник (синий LED)
+#else
 // пины управления 74HC138
 const int PIN_A = 2; // адресный вход A (бит 0)
 const int PIN_B = 3; // адресный вход B (бит 1)
 const int PIN_C = 4; // адресный вход C (бит 2, зафиксирован в LOW для Y0..Y3)
+#endif
 
 // пины ультразвукового датчика расстояния RCWL-9610A (HC-SR04)
 const int PIN_TRIG = 5; // сигнал запуска измерения (Trig)
@@ -73,6 +113,27 @@ void sendTelemetry(long distCm, Direction dir) {
 }
 
 void applyDirectionOutputs(Direction dir) {
+#if defined(WOKWI_SIMULATION)
+  switch (dir) {
+    case Direction::CENTER:
+      digitalWrite(PIN_LED_LEFT, LOW);
+      digitalWrite(PIN_LED_CENTER, HIGH);
+      digitalWrite(PIN_LED_RIGHT, LOW);
+      break;
+
+    case Direction::LEFT:
+      digitalWrite(PIN_LED_LEFT, HIGH);
+      digitalWrite(PIN_LED_CENTER, LOW);
+      digitalWrite(PIN_LED_RIGHT, LOW);
+      break;
+
+    case Direction::RIGHT:
+      digitalWrite(PIN_LED_LEFT, LOW);
+      digitalWrite(PIN_LED_CENTER, LOW);
+      digitalWrite(PIN_LED_RIGHT, HIGH);
+      break;
+  }
+#else
   switch (dir) {
     case Direction::CENTER:
       // код 00 (CBA = 000) -> активен выход Y0 (светодиоды выключены)
@@ -92,6 +153,7 @@ void applyDirectionOutputs(Direction dir) {
       digitalWrite(PIN_B, HIGH);
       break;
   }
+#endif
 }
 
 void setup() {
@@ -100,6 +162,16 @@ void setup() {
   btSerial.stopListening(); // отключаем прерывания RX: трость только передает, входящие байты игнорируются
   Wire.begin();
 
+#if defined(WOKWI_SIMULATION)
+  // настройка прямых выходов светодиодов в Wokwi
+  pinMode(PIN_LED_LEFT, OUTPUT);
+  pinMode(PIN_LED_CENTER, OUTPUT);
+  pinMode(PIN_LED_RIGHT, OUTPUT);
+
+  digitalWrite(PIN_LED_LEFT, LOW);
+  digitalWrite(PIN_LED_CENTER, HIGH); // по умолчанию трость в нейтрали
+  digitalWrite(PIN_LED_RIGHT, LOW);
+#else
   // настройка выходов 74HC138
   pinMode(PIN_A, OUTPUT);
   pinMode(PIN_B, OUTPUT);
@@ -108,6 +180,7 @@ void setup() {
   digitalWrite(PIN_A, LOW);
   digitalWrite(PIN_B, LOW);
   digitalWrite(PIN_C, LOW);
+#endif
 
   // настройка ультразвукового датчика расстояния
   pinMode(PIN_TRIG, OUTPUT);

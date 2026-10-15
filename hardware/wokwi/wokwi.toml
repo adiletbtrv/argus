@@ -1,0 +1,5 @@
+[wokwi]
+version = 1
+firmware = "../../firmware/argus_cane/build/argus_cane.ino.hex"
+elf = "../../firmware/argus_cane/build/argus_cane.ino.elf"
+sketch = "../../firmware/argus_cane/argus_cane.ino"
