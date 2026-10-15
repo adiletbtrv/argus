@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "author": "Argus Hardware Team",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-arduino-nano",
+      "id": "nano",
+      "top": 150,
+      "left": 100,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot",
+      "top": 0,
+      "left": 60,
+      "attrs": { "label": "TILT (-45°..+45°)" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_left",
+      "top": 60,
+      "left": 280,
+      "attrs": { "color": "green", "label": "LEFT (D8)" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_center",
+      "top": 60,
+      "left": 360,
+      "attrs": { "color": "yellow", "label": "CENTER (D9)" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_right",
+      "top": 60,
+      "left": 440,
+      "attrs": { "color": "blue", "label": "RIGHT (D10)" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_left",
+      "top": 140,
+      "left": 280,
+      "attrs": { "value": "220" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_center",
+      "top": 140,
+      "left": 360,
+      "attrs": { "value": "220" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_right",
+      "top": 140,
+      "left": 440,
+      "attrs": { "value": "220" }
+    }
+  ],
+  "connections": [
+    [ "pot:GND", "nano:GND.1", "black", [ "v0" ] ],
+    [ "pot:VCC", "nano:5V", "red", [ "v0" ] ],
+    [ "pot:SIG", "nano:A0", "orange", [ "v0" ] ],
+    [ "nano:D8", "led_left:A", "green", [ "v0" ] ],
+    [ "nano:D9", "led_center:A", "yellow", [ "v0" ] ],
+    [ "nano:D10", "led_right:A", "blue", [ "v0" ] ],
+    [ "led_left:C", "r_left:1", "black", [ "v0" ] ],
+    [ "led_center:C", "r_center:1", "black", [ "v0" ] ],
+    [ "led_right:C", "r_right:1", "black", [ "v0" ] ],
+    [ "r_left:2", "nano:GND.2", "black", [ "v0" ] ],
+    [ "r_center:2", "nano:GND.2", "black", [ "v0" ] ],
+    [ "r_right:2", "nano:GND.2", "black", [ "v0" ] ]
+  ],
+  "dependencies": {}
+}

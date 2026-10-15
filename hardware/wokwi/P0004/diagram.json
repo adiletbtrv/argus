@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "author": "Argus Hardware Team",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-arduino-nano",
+      "id": "nano",
+      "top": 150,
+      "left": 100,
+      "attrs": {}
+    },
+    {
+      "type": "chip:74hc138",
+      "id": "decoder",
+      "top": 140,
+      "left": 340,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_left",
+      "top": 50,
+      "left": 280,
+      "attrs": { "value": "470" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_right",
+      "top": 50,
+      "left": 420,
+      "attrs": { "value": "470" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_left",
+      "top": 80,
+      "left": 290,
+      "attrs": { "color": "orange", "label": "LED LEFT (Y1)" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_right",
+      "top": 80,
+      "left": 430,
+      "attrs": { "color": "yellow", "label": "LED RIGHT (Y2)" }
+    }
+  ],
+  "connections": [
+    [ "nano:5V", "decoder:VCC", "red", [ "v0" ] ],
+    [ "nano:5V", "decoder:G1", "red", [ "v0" ] ],
+    [ "nano:GND.1", "decoder:GND", "black", [ "v0" ] ],
+    [ "nano:GND.1", "decoder:G2A", "black", [ "v0" ] ],
+    [ "nano:GND.1", "decoder:G2B", "black", [ "v0" ] ],
+    [ "nano:D2", "decoder:A", "blue", [ "v0" ] ],
+    [ "nano:D3", "decoder:B", "blue", [ "v0" ] ],
+    [ "nano:D4", "decoder:C", "blue", [ "v0" ] ],
+    [ "nano:5V", "r_left:1", "red", [ "v0" ] ],
+    [ "nano:5V", "r_right:1", "red", [ "v0" ] ],
+    [ "r_left:2", "led_left:A", "green", [ "v0" ] ],
+    [ "r_right:2", "led_right:A", "orange", [ "v0" ] ],
+    [ "decoder:Y1", "led_left:C", "green", [ "v0" ] ],
+    [ "decoder:Y2", "led_right:C", "orange", [ "v0" ] ]
+  ],
+  "dependencies": {}
+}

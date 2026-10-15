@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "author": "Argus Hardware Team",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-arduino-nano",
+      "id": "nano",
+      "top": 150,
+      "left": 100,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_top",
+      "top": 100,
+      "left": 280,
+      "attrs": { "value": "1000", "label": "R1 (1k)" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_bottom",
+      "top": 180,
+      "left": 280,
+      "attrs": { "value": "2000", "label": "R2 (2k)" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_data",
+      "top": 100,
+      "left": 400,
+      "attrs": { "color": "green", "label": "TX 3.3V Data Pulse" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_led",
+      "top": 180,
+      "left": 400,
+      "attrs": { "value": "470" }
+    }
+  ],
+  "connections": [
+    [ "nano:D11", "r_top:1", "blue", [ "v0" ] ],
+    [ "r_top:2", "r_bottom:1", "orange", [ "v0" ] ],
+    [ "r_bottom:2", "nano:GND.1", "black", [ "v0" ] ],
+    [ "r_top:2", "led_data:A", "orange", [ "v0" ] ],
+    [ "led_data:C", "r_led:1", "green", [ "v0" ] ],
+    [ "r_led:2", "nano:GND.1", "black", [ "v0" ] ]
+  ],
+  "dependencies": {}
+}
