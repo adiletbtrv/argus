@@ -1,11 +1,11 @@
-// Реализация фильтрации и гистерезиса для определения поворота трости.
+// фильтрация и гистерезис для определения поворота трости
 
 #include "direction_logic.h"
 
 Direction DirectionClassifier::classify(float rollDeg, unsigned long nowMs) {
   Direction candidate = Direction::CENTER;
 
-  // Определение целевого кандидата с учетом текущего направления и зоны гистерезиса
+  // определение целевого кандидата с учетом текущего направления и зоны гистерезиса
   if (currentDir == Direction::RIGHT) {
     if (rollDeg >= (thresholdDeg - hysteresisDeg)) {
       candidate = Direction::RIGHT;
@@ -33,20 +33,20 @@ Direction DirectionClassifier::classify(float rollDeg, unsigned long nowMs) {
     }
   }
 
-  // Если кандидат совпадает с активным направлением, сбрасываем ожидание перехода
+  // если кандидат совпадает с активным направлением, сбрасываем ожидание перехода
   if (candidate == currentDir) {
     pendingDir = currentDir;
     pendingSince = nowMs;
     return currentDir;
   }
 
-  // Обнаружена смена направления-кандидата: засекаем время начала
+  // обнаружена смена направления кандидата так что засекаем время начала
   if (pendingDir != candidate) {
     pendingDir = candidate;
     pendingSince = nowMs;
   }
 
-  // Проверяем, удерживается ли кандидат дольше установленного порога minHoldMs
+  // проверяем удерживается ли кандидат дольше установленного порога minHoldMs
   if ((nowMs - pendingSince) >= minHoldMs) {
     currentDir = candidate;
     pendingDir = currentDir;
