@@ -1,11 +1,11 @@
 const int TRIG_PIN = 9;
 const int ECHO_PIN = 8;
-const int LED_PIN = 13;
+const int MOTOR_PIN = 13;
 
 void setup() {
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
-  pinMode(LED_PIN, OUTPUT);
+  pinMode(MOTOR_PIN, OUTPUT);
 }
 
 void loop() {
@@ -19,9 +19,9 @@ void loop() {
   int distance = duration * 0.034 / 2; 
 
   if (distance < 20) {
-    digitalWrite(LED_PIN, HIGH); 
+    digitalWrite(MOTOR_PIN, HIGH); 
   } else {
-    digitalWrite(LED_PIN, LOW);
+    digitalWrite(MOTOR_PIN, LOW);
   }
   delay(100);
 }
