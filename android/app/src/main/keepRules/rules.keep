@@ -10,3 +10,10 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+
+# MediaPipe Tasks (on-device object detection): native code calls back into
+# Java via JNI and options are serialized with protobuf-lite reflection.
+-keep class com.google.mediapipe.** { *; }
+-keep class * extends com.google.protobuf.GeneratedMessageLite { *; }
+-dontwarn com.google.mediapipe.**
+-dontwarn com.google.protobuf.**
