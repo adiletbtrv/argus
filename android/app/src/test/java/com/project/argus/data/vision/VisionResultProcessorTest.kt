@@ -101,7 +101,7 @@ class VisionResultProcessorTest {
         assertEquals(0.60f, doorHazard!!.confidence, 0.001f)
     }
 
-    //SpatialClassifier — geometry in isolation
+    // SpatialClassifier: geometry in isolation
 
     @Test
     fun `SpatialClassifier - classifyZone returns LEFT CENTER and RIGHT`() {
@@ -123,18 +123,55 @@ class VisionResultProcessorTest {
         assertEquals(DistanceCategory.FAR, classifier.classifyDistance(boxArea = 40_000f, totalArea = totalArea))     // 4%
     }
 
-    // LabelFormatter — string sanitization in isolation
+    // LabelFormatter: string sanitization in isolation
 
     @Test
-    fun `LabelFormatter - formats Home good to Furniture and capitalizes words`() {
+    fun `LabelFormatter - maps COCO labels to display form`() {
         val formatter = LabelFormatter()
-        assertEquals("Furniture", formatter.format("Home good"))
-        assertEquals("Furniture", formatter.format("home good"))
-        assertEquals("Table", formatter.format("table"))
+        assertEquals("Person", formatter.format("person"))
+        assertEquals("Dining table", formatter.format("dining table"))
+        assertEquals("TV", formatter.format("tv"))
+        assertEquals("Computer mouse", formatter.format("mouse"))
+        assertEquals("Remote control", formatter.format("remote"))
+        assertEquals("Ball", formatter.format("sports ball"))
+        assertEquals("Hair dryer", formatter.format("hair drier"))
         assertEquals("Armrest", formatter.format("armrest"))
     }
 
-    // [SRP] VisionResultProcessor — orchestration integration test
+    @Test
+    fun `HazardClassifier - legacy ML Kit category is not treated as armrest`() {
+        assertFalse(hazardClassifier.isArmrestObject("Home good", isArmrestDominant = true))
+        assertTrue(hazardClassifier.isArmrestObject("couch", isArmrestDominant = true))
+        assertTrue(hazardClassifier.isArmrestObject("chair", isArmrestDominant = true))
+    }
+
+    @Test
+    fun `VisionResultProcessor - drops placeholder labels`() {
+        val processor = VisionResultProcessor()
+        val objects = listOf(
+            RawDetectedObject(
+                boundingBox = BoundingBox2D(100f, 100f, 300f, 300f),
+                labels = listOf(RawLabel("???", 0.90f))
+            ),
+            RawDetectedObject(
+                boundingBox = BoundingBox2D(400f, 100f, 600f, 300f),
+                labels = listOf(RawLabel("chair", 0.85f))
+            )
+        )
+
+        val result = processor.process(
+            detectedObjects = objects,
+            imageLabels = emptyList(),
+            imageWidth = 1000,
+            imageHeight = 1000
+        )
+
+        assertEquals(1, result.obstacles.size)
+        assertEquals("Chair", result.obstacles[0].label)
+    }
+
+
+    // VisionResultProcessor: orchestration integration test
 
     @Test
     fun `VisionResultProcessor - obstacle label remapped to Armrest when armrest dominant`() {
