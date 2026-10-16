@@ -166,7 +166,7 @@ class EvaluateHazardsUseCaseTest {
     // 3. Obstacle Collision Warnings in Center Zone
 
     @Test
-    fun `near obstacle in center zone triggers Close prompt`() {
+    fun `near obstacle in center zone triggers careful prompt`() {
         val frame = VisionFrameResult(
             obstacles = listOf(
                 DetectedObstacle(
@@ -182,7 +182,7 @@ class EvaluateHazardsUseCaseTest {
 
         val decision = useCase(frame)
 
-        assertEquals("Close: Table", decision.spokenText)
+        assertEquals("Careful, table right ahead", decision.spokenText)
         assertFalse(decision.isUrgent)
     }
 

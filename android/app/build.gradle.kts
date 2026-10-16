@@ -17,6 +17,14 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+    }
+
+    androidResources {
+        noCompress += "tflite"
     }
 
     buildTypes {
@@ -54,7 +62,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.bundles.camerax)
-    implementation(libs.mlkit.objectdetection)
+    implementation(libs.mediapipe.tasks.vision)
     implementation(libs.mlkit.image.labeling)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.guava)
