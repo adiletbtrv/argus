@@ -77,9 +77,9 @@ class HazardClassifier {
      */
     fun isArmrestObject(rawText: String, isArmrestDominant: Boolean): Boolean =
         isArmrestDominant && (
-            rawText.contains("good", ignoreCase = true) ||
             rawText.contains("furniture", ignoreCase = true) ||
             rawText.contains("chair", ignoreCase = true) ||
+            rawText.contains("couch", ignoreCase = true) ||
             rawText.contains("arm", ignoreCase = true)
         )
 }

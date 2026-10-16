@@ -143,7 +143,7 @@ class VisionResultProcessorTest {
         val objects = listOf(
             RawDetectedObject(
                 boundingBox = BoundingBox2D(100f, 100f, 300f, 300f),
-                labels = listOf(RawLabel("Home good", 0.70f))
+                labels = listOf(RawLabel("couch", 0.70f))
             ),
             RawDetectedObject(
                 boundingBox = BoundingBox2D(400f, 100f, 600f, 300f),
