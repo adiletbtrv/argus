@@ -35,11 +35,13 @@ class VisionIntegrationTest {
 
     @Test
     fun testVisionAnalyzerInitialization() {
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
         var callbackInvoked = false
-        val analyzer = VisionAnalyzer {
+        val analyzer = VisionAnalyzer(appContext) {
             callbackInvoked = true
         }
         assertNotNull(analyzer)
+        analyzer.close()
     }
 
     @Test

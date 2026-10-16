@@ -58,9 +58,15 @@ fun CameraPreviewScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    val visionAnalyzer = remember(context) {
+        VisionAnalyzer(context) { result ->
+            onFrameAnalyzed(result)
+        }
+    }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(visionAnalyzer) {
         onDispose {
+            visionAnalyzer.close()
             cameraExecutor.shutdown()
         }
     }
@@ -91,12 +97,7 @@ fun CameraPreviewScreen(
                         .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                         .build()
                         .also { analysis ->
-                            analysis.setAnalyzer(
-                                cameraExecutor,
-                                VisionAnalyzer { result ->
-                                    onFrameAnalyzed(result)
-                                }
-                            )
+                            analysis.setAnalyzer(cameraExecutor, visionAnalyzer)
                         }
 
                     val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
