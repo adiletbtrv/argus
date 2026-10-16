@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
  *
  * [SRP] Single responsibility: coordinates UI state and delegates decisions to the use case.
  * [DIP] Depends on [SpeechOutput] abstraction, not the concrete Android TTS implementation.
- * [ISP] Only receives the speaking capability it uses — not lifecycle management (shutdown).
+ * Only receives the speaking capability it uses, not lifecycle management (shutdown).
  */
 class MainViewModel(
     private val evaluateHazardsUseCase: EvaluateHazardsUseCase,

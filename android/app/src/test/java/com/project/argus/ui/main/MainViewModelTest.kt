@@ -23,7 +23,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * [ISP] Fake depends only on [SpeechOutput] — not on lifecycle management methods.
+ * Fake depends only on [SpeechOutput], not on lifecycle management methods.
  */
 class FakeSpeechOutput : SpeechOutput {
     val spokenMessages = mutableListOf<Pair<String, Boolean>>()
