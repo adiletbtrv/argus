@@ -1,32 +1,27 @@
 package com.project.argus.domain.usecase
 
+import com.project.argus.domain.model.DistanceCategory
+import com.project.argus.domain.model.HorizontalZone
 import com.project.argus.domain.model.SpatialHazard
 import com.project.argus.domain.model.VisionFrameResult
+import java.util.Locale
 
-
- //Result of evaluating hazards, containing speech prompt and filtered spatial hazards.
-
+// Result of evaluating hazards, containing speech prompt and filtered spatial hazards.
 data class AlertDecision(
     val spokenText: String?,
     val isUrgent: Boolean,
     val validatedHazards: List<SpatialHazard>
 )
 
-
 interface AlertStrategy {
-
-    //@return an [AlertDecision] if this strategy matches the current state, otherwise null.
-
+    // Returns an [AlertDecision] if this strategy matches the current state, otherwise null.
     fun evaluate(
         validatedHazards: List<SpatialHazard>,
         frame: VisionFrameResult
     ): AlertDecision?
 }
 
-
-
- //[SRP] Handles urgent stairs alert — highest navigational priority.
-
+// Handles urgent stairs alert: highest navigational priority.
 internal class StairsAlertStrategy : AlertStrategy {
     override fun evaluate(
         validatedHazards: List<SpatialHazard>,
@@ -42,9 +37,7 @@ internal class StairsAlertStrategy : AlertStrategy {
     }
 }
 
-
-//[SRP] Handles urgent wall proximity alert.
-
+// Handles urgent wall proximity alert.
 internal class WallProximityAlertStrategy : AlertStrategy {
     override fun evaluate(
         validatedHazards: List<SpatialHazard>,
@@ -60,9 +53,7 @@ internal class WallProximityAlertStrategy : AlertStrategy {
     }
 }
 
-
-//[SRP] Handles armrest directional guidance — includes zone-aware phrasing.
-
+// Handles armrest directional guidance: includes zone-aware phrasing.
 internal class ArmrestAlertStrategy : AlertStrategy {
     override fun evaluate(
         validatedHazards: List<SpatialHazard>,
@@ -71,9 +62,9 @@ internal class ArmrestAlertStrategy : AlertStrategy {
         val armrest = validatedHazards.filterIsInstance<SpatialHazard.ArmrestDetected>().firstOrNull()
             ?: return null
         val side = when (armrest.zone) {
-            com.project.argus.domain.model.HorizontalZone.LEFT -> "on the left"
-            com.project.argus.domain.model.HorizontalZone.RIGHT -> "on the right"
-            com.project.argus.domain.model.HorizontalZone.CENTER -> "ahead"
+            HorizontalZone.LEFT -> "on the left"
+            HorizontalZone.RIGHT -> "on the right"
+            HorizontalZone.CENTER -> "ahead"
         }
         return AlertDecision(
             spokenText = "Armrest $side",
@@ -83,8 +74,7 @@ internal class ArmrestAlertStrategy : AlertStrategy {
     }
 }
 
-//[SRP] Handles doorway announcement.
-
+// Handles doorway announcement.
 internal class DoorAheadAlertStrategy : AlertStrategy {
     override fun evaluate(
         validatedHazards: List<SpatialHazard>,
@@ -100,23 +90,26 @@ internal class DoorAheadAlertStrategy : AlertStrategy {
     }
 }
 
-//[SRP] Handles nearby or medium obstacles in the direct center collision path.
-
+// Handles nearby or medium obstacles in the direct center collision path.
 internal class CenterObstacleAlertStrategy : AlertStrategy {
     override fun evaluate(
         validatedHazards: List<SpatialHazard>,
         frame: VisionFrameResult
     ): AlertDecision? {
         val centerObstacle = frame.obstacles.firstOrNull {
-            it.zone == com.project.argus.domain.model.HorizontalZone.CENTER &&
-                (it.estimatedDistanceCategory == com.project.argus.domain.model.DistanceCategory.NEAR ||
-                 it.estimatedDistanceCategory == com.project.argus.domain.model.DistanceCategory.MEDIUM)
+            it.zone == HorizontalZone.CENTER &&
+                (it.estimatedDistanceCategory == DistanceCategory.NEAR ||
+                 it.estimatedDistanceCategory == DistanceCategory.MEDIUM)
         } ?: return null
 
-        val prompt = if (centerObstacle.estimatedDistanceCategory ==
-            com.project.argus.domain.model.DistanceCategory.NEAR
-        ) {
-            "Close: ${centerObstacle.label}"
+        val spokenLabel = if (centerObstacle.label.equals("TV", ignoreCase = true)) {
+            "TV"
+        } else {
+            centerObstacle.label.lowercase(Locale.ROOT)
+        }
+
+        val prompt = if (centerObstacle.estimatedDistanceCategory == DistanceCategory.NEAR) {
+            "Careful, $spokenLabel right ahead"
         } else {
             "${centerObstacle.label} ahead"
         }
