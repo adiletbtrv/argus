@@ -4,7 +4,7 @@ import com.project.argus.domain.model.DetectedObstacle
 import com.project.argus.domain.model.VisionFrameResult
 
 /**
- * [SRP] Responsible solely for orchestrating the vision post-processing pipeline:
+ * Responsible solely for orchestrating the vision post-processing pipeline:
  * delegates hazard classification to [HazardClassifier], geometry to [SpatialClassifier],
  * and label formatting to [LabelFormatter].
  */
@@ -25,15 +25,20 @@ class VisionResultProcessor(
             "${labelFormatter.format(label.text)} (${(label.confidence * 100).toInt()}%)"
         }
 
+        val validObjects = detectedObjects.filter { obj ->
+            val topLabel = obj.labels.firstOrNull()?.text?.trim()
+            topLabel != null && topLabel != "???"
+        }
+
         val hazards = hazardClassifier.classify(
             imageLabels = imageLabels,
-            hasPhysicalObjects = detectedObjects.isNotEmpty()
+            hasPhysicalObjects = validObjects.isNotEmpty()
         )
 
         val isArmrestDominant = hazards.any { it is com.project.argus.domain.model.SpatialHazard.ArmrestDetected }
         val totalArea = (imageWidth * imageHeight).toFloat()
 
-        val obstacles = detectedObjects.mapIndexed { index, mlObject ->
+        val obstacles = validObjects.mapIndexed { index, mlObject ->
             val box = mlObject.boundingBox
             val zone = spatialClassifier.classifyZone(box.centerX(), imageWidth)
             val distanceCategory = spatialClassifier.classifyDistance(box.area(), totalArea)
