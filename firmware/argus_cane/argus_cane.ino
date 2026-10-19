@@ -32,6 +32,7 @@ const int BT_TX_PIN = 11; // TX Arduino к RX HC-05 через делитель 
 // параметры обнаружения препятствий и виброотклика
 const long OBSTACLE_THRESHOLD_CM = 50; // порог дистанции для тактильного сигнала (см)
 const int VIBRO_INTENSITY = 255;       // интенсивность вибрации
+const unsigned long VIBRO_PULSE_DURATION_MS = 40; // длительность тактильного импульса
 
 SoftwareSerial btSerial(BT_RX_PIN, BT_TX_PIN);
 MPU6050 mpu(Wire);
@@ -40,6 +41,11 @@ Direction lastReportedDir = Direction::CENTER;
 
 unsigned long lastDistanceCheckMs = 0;
 const unsigned long DISTANCE_CHECK_INTERVAL_MS = 60;
+
+// переменные автомата состояний виброотклика
+unsigned long lastPulseToggle = 0;
+bool pulseState = false;
+unsigned long pulseIntervalMs = 0;
 
 long readDistanceCm() {
   digitalWrite(PIN_TRIG, LOW);
@@ -91,6 +97,30 @@ void applyDirectionOutputs(Direction dir) {
       digitalWrite(PIN_A, LOW);
       digitalWrite(PIN_B, HIGH);
       break;
+  }
+}
+
+void updateVibrationFSM(unsigned long now) {
+  if (pulseIntervalMs == 0) {
+    if (pulseState) {
+      analogWrite(PIN_VIBRO, 0);
+      pulseState = false;
+    }
+    return;
+  }
+
+  if (pulseState) {
+    if (now - lastPulseToggle >= VIBRO_PULSE_DURATION_MS) {
+      analogWrite(PIN_VIBRO, 0);
+      pulseState = false;
+      lastPulseToggle = now;
+    }
+  } else {
+    if (now - lastPulseToggle >= pulseIntervalMs) {
+      analogWrite(PIN_VIBRO, VIBRO_INTENSITY);
+      pulseState = true;
+      lastPulseToggle = now;
+    }
   }
 }
 
@@ -152,24 +182,20 @@ void loop() {
     Serial.println(F(" deg"));
   }
 
-  // опрос RCWL-9610A и управление вибромотором (прототип P0002)
+  // опрос RCWL-9610A и пересчет интервала виброотклика
   unsigned long now = millis();
   if (now - lastDistanceCheckMs >= DISTANCE_CHECK_INTERVAL_MS) {
     lastDistanceCheckMs = now;
     long dist = readDistanceCm();
 
     if (dist > 0 && dist <= OBSTACLE_THRESHOLD_CM) {
-      // препятствие обнаружено ближе порогового расстояния:
-      // 1. активация вибромотора через транзистор
-      analogWrite(PIN_VIBRO, VIBRO_INTENSITY);
-
-      // 2. исходящая односторонняя телеметрия на смартфон
+      pulseIntervalMs = map(constrain(dist, 5, 50), 5, 50, 40, 400);
       sendTelemetry(dist, currentDir);
     } else {
-      // препятствие отсутствует или дальше порога
-      analogWrite(PIN_VIBRO, 0);
+      pulseIntervalMs = 0;
     }
   }
 
-  delay(20);
+  // обновление конечного автомата вибрации
+  updateVibrationFSM(now);
 }
