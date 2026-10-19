@@ -29,6 +29,9 @@ const int PIN_VIBRO = 9;
 const int BT_RX_PIN = 10; // не используется для приема (односторонняя телеметрия)
 const int BT_TX_PIN = 11; // TX Arduino к RX HC-05 через делитель напряжения (1к / 2к)
 
+// пин и порог детектора зарядки (Battery Shield TP4056)
+const int PIN_CHARGING = A1;
+
 // параметры обнаружения препятствий и виброотклика
 const long OBSTACLE_THRESHOLD_CM = 50; // порог дистанции для тактильного сигнала (см)
 const int VIBRO_INTENSITY = 255;       // интенсивность вибрации
@@ -52,6 +55,21 @@ unsigned long pulseIntervalMs = 0;
 long currentDist = -1;
 unsigned long lastTelemetryMs = 0;
 const unsigned long TELEMETRY_INTERVAL_MS = 180; // периодичность отправки (150-200 мс)
+
+// переменные детектора зарядки и двойного виброотклика
+bool lastChargingState = false;
+
+enum class ChargingVibroState {
+  IDLE,
+  PULSE_1,
+  PAUSE,
+  PULSE_2
+};
+
+ChargingVibroState chargingVibroState = ChargingVibroState::IDLE;
+unsigned long chargingVibroTimer = 0;
+const unsigned long CHARGING_PULSE_MS = 60;
+const unsigned long CHARGING_PAUSE_MS = 60;
 
 long readDistanceCm() {
   digitalWrite(PIN_TRIG, LOW);
@@ -106,7 +124,38 @@ void applyDirectionOutputs(Direction dir) {
   }
 }
 
+void updateChargingVibro(unsigned long now) {
+  if (chargingVibroState == ChargingVibroState::IDLE) {
+    return;
+  }
+
+  if (chargingVibroState == ChargingVibroState::PULSE_1) {
+    if (now - chargingVibroTimer >= CHARGING_PULSE_MS) {
+      analogWrite(PIN_VIBRO, 0);
+      chargingVibroState = ChargingVibroState::PAUSE;
+      chargingVibroTimer = now;
+    }
+  } else if (chargingVibroState == ChargingVibroState::PAUSE) {
+    if (now - chargingVibroTimer >= CHARGING_PAUSE_MS) {
+      analogWrite(PIN_VIBRO, VIBRO_INTENSITY);
+      chargingVibroState = ChargingVibroState::PULSE_2;
+      chargingVibroTimer = now;
+    }
+  } else if (chargingVibroState == ChargingVibroState::PULSE_2) {
+    if (now - chargingVibroTimer >= CHARGING_PULSE_MS) {
+      analogWrite(PIN_VIBRO, 0);
+      chargingVibroState = ChargingVibroState::IDLE;
+      chargingVibroTimer = now;
+      lastPulseToggle = now;
+    }
+  }
+}
+
 void updateVibrationFSM(unsigned long now) {
+  if (chargingVibroState != ChargingVibroState::IDLE) {
+    return; // не перебиваем сигнал подключения зарядки
+  }
+
   if (pulseIntervalMs == 0) {
     if (pulseState) {
       analogWrite(PIN_VIBRO, 0);
@@ -154,6 +203,9 @@ void setup() {
   // настройка вывода вибромоторчика
   pinMode(PIN_VIBRO, OUTPUT);
   analogWrite(PIN_VIBRO, 0);
+
+  // настройка входа детектора зарядки
+  pinMode(PIN_CHARGING, INPUT);
 
   Serial.println(F("Argus Smart Cane: инициализация..."));
 
@@ -218,6 +270,16 @@ void loop() {
     sendTelemetry(currentDist, currentDir);
   }
 
-  // обновление конечного автомата вибрации
+  // детекция переднего фронта подключения зарядки
+  bool currentChargingState = (analogRead(PIN_CHARGING) > 512);
+  if (currentChargingState && !lastChargingState) {
+    chargingVibroState = ChargingVibroState::PULSE_1;
+    chargingVibroTimer = now;
+    analogWrite(PIN_VIBRO, VIBRO_INTENSITY);
+  }
+  lastChargingState = currentChargingState;
+
+  // обновление конечных автоматов вибрации
+  updateChargingVibro(now);
   updateVibrationFSM(now);
 }
