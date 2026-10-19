@@ -15,7 +15,7 @@ import org.junit.Test
 
 /**
  * Unit tests for [EvaluateHazardsUseCase] verifying temporal debouncing,
- * armrest vs stairs suppression, priority alert hierarchy, and spatial heuristics.
+ * armrest vs stairs suppression, priority alert hierarchy, Russian alerts, and corridor heuristics.
  */
 class EvaluateHazardsUseCaseTest {
 
@@ -56,7 +56,7 @@ class EvaluateHazardsUseCaseTest {
         // Immediate second frame confirms hazard
         val decision2 = useCase(frame2)
 
-        assertEquals("Caution, stairs ahead!", decision2.spokenText)
+        assertEquals("Осторожно, впереди лестница!", decision2.spokenText)
         assertTrue(decision2.isUrgent)
         assertTrue(decision2.validatedHazards.any { it is SpatialHazard.StairsAhead })
     }
@@ -76,7 +76,7 @@ class EvaluateHazardsUseCaseTest {
         // Frame 2: Armrest arrives -> cancels stairs accumulator
         val decision = useCase(armrestFrame)
 
-        assertEquals("Armrest ahead", decision.spokenText)
+        assertEquals("Подлокотник впереди", decision.spokenText)
         assertFalse(decision.isUrgent)
         assertTrue(decision.validatedHazards.any { it is SpatialHazard.ArmrestDetected })
         assertFalse(decision.validatedHazards.any { it is SpatialHazard.StairsAhead })
@@ -104,7 +104,7 @@ class EvaluateHazardsUseCaseTest {
             obstacles = listOf(
                 DetectedObstacle(
                     id = 0,
-                    label = "Chair",
+                    label = "chair",
                     confidence = 0.9f,
                     boundingBox = BoundingBox2D(0f, 0f, 100f, 100f),
                     zone = HorizontalZone.CENTER,
@@ -116,7 +116,7 @@ class EvaluateHazardsUseCaseTest {
         useCase(frame1)
         val decision = useCase(frame2)
 
-        assertEquals("Caution, stairs ahead!", decision.spokenText)
+        assertEquals("Осторожно, впереди лестница!", decision.spokenText)
         assertTrue(decision.isUrgent)
     }
 
@@ -128,7 +128,7 @@ class EvaluateHazardsUseCaseTest {
 
         val decision = useCase(frame)
 
-        assertEquals("Warning, wall directly ahead!", decision.spokenText)
+        assertEquals("Внимание, стена прямо по курсу!", decision.spokenText)
         assertTrue(decision.isUrgent)
         assertTrue(decision.validatedHazards.any { it is SpatialHazard.WallProximity })
     }
@@ -143,11 +143,11 @@ class EvaluateHazardsUseCaseTest {
         )
 
         val leftDecision = useCase(leftFrame)
-        assertEquals("Armrest on the left", leftDecision.spokenText)
+        assertEquals("Подлокотник слева", leftDecision.spokenText)
         assertFalse(leftDecision.isUrgent)
 
         val rightDecision = useCase(rightFrame)
-        assertEquals("Armrest on the right", rightDecision.spokenText)
+        assertEquals("Подлокотник справа", rightDecision.spokenText)
         assertFalse(rightDecision.isUrgent)
     }
 
@@ -159,19 +159,19 @@ class EvaluateHazardsUseCaseTest {
 
         val decision = useCase(frame)
 
-        assertEquals("Doorway ahead", decision.spokenText)
+        assertEquals("Впереди дверной проём", decision.spokenText)
         assertFalse(decision.isUrgent)
     }
 
     // 3. Obstacle Collision Warnings in Center Zone
 
     @Test
-    fun `near obstacle in center zone triggers careful prompt`() {
+    fun `near obstacle in center zone triggers close urgent warning`() {
         val frame = VisionFrameResult(
             obstacles = listOf(
                 DetectedObstacle(
                     id = 1,
-                    label = "Table",
+                    label = "table",
                     confidence = 0.85f,
                     boundingBox = BoundingBox2D(300f, 200f, 700f, 800f),
                     zone = HorizontalZone.CENTER,
@@ -182,17 +182,17 @@ class EvaluateHazardsUseCaseTest {
 
         val decision = useCase(frame)
 
-        assertEquals("Careful, table right ahead", decision.spokenText)
-        assertFalse(decision.isUrgent)
+        assertEquals("Вплотную, стол!", decision.spokenText)
+        assertTrue(decision.isUrgent)
     }
 
     @Test
-    fun `medium distance obstacle in center zone triggers ahead prompt`() {
+    fun `medium distance obstacle in center zone with left free recommends bypass left`() {
         val frame = VisionFrameResult(
             obstacles = listOf(
                 DetectedObstacle(
                     id = 1,
-                    label = "Person",
+                    label = "person",
                     confidence = 0.85f,
                     boundingBox = BoundingBox2D(350f, 200f, 650f, 500f),
                     zone = HorizontalZone.CENTER,
@@ -203,7 +203,36 @@ class EvaluateHazardsUseCaseTest {
 
         val decision = useCase(frame)
 
-        assertEquals("Person ahead", decision.spokenText)
+        assertEquals("Прямо человек, обойдите слева", decision.spokenText)
+        assertFalse(decision.isUrgent)
+    }
+
+    @Test
+    fun `medium distance obstacle in center zone with left blocked recommends bypass right`() {
+        val frame = VisionFrameResult(
+            obstacles = listOf(
+                DetectedObstacle(
+                    id = 1,
+                    label = "person",
+                    confidence = 0.85f,
+                    boundingBox = BoundingBox2D(350f, 200f, 650f, 500f),
+                    zone = HorizontalZone.CENTER,
+                    estimatedDistanceCategory = DistanceCategory.MEDIUM
+                ),
+                DetectedObstacle(
+                    id = 2,
+                    label = "chair",
+                    confidence = 0.85f,
+                    boundingBox = BoundingBox2D(50f, 200f, 250f, 500f),
+                    zone = HorizontalZone.LEFT,
+                    estimatedDistanceCategory = DistanceCategory.MEDIUM
+                )
+            )
+        )
+
+        val decision = useCase(frame)
+
+        assertEquals("Прямо человек, обойдите справа", decision.spokenText)
         assertFalse(decision.isUrgent)
     }
 
@@ -213,7 +242,7 @@ class EvaluateHazardsUseCaseTest {
             obstacles = listOf(
                 DetectedObstacle(
                     id = 1,
-                    label = "Pillar",
+                    label = "backpack",
                     confidence = 0.85f,
                     boundingBox = BoundingBox2D(50f, 200f, 150f, 500f),
                     zone = HorizontalZone.LEFT,
@@ -221,7 +250,7 @@ class EvaluateHazardsUseCaseTest {
                 ),
                 DetectedObstacle(
                     id = 2,
-                    label = "Tree",
+                    label = "bench",
                     confidence = 0.85f,
                     boundingBox = BoundingBox2D(400f, 200f, 500f, 300f),
                     zone = HorizontalZone.CENTER,

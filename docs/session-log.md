@@ -64,3 +64,58 @@
    - Documented pin A1 and charging detection logic in `docs/pinout.md`.
    - Verified build with Arduino CLI for `arduino:avr:nano`: Flash 13288 bytes (43%), RAM 697 bytes (34%).
 
+## 2026-10-19: Pre-Midterm Android App Upgrade (Bluetooth SPP, Sensor Fusion, Russian TTS, UI Status Panels)
+
+- **Branch**: `feature/pre-midterm-upgrade`
+- **Role**: Android/Kotlin Developer
+
+### Changes Summary
+1. **Object Allow-list & Noise Filter (Phase 2 & 3)**:
+   - Added allow-list in `VisionResultProcessor.kt` for 10 COCO classes: `person, chair, dining table, bench, backpack, suitcase, potted plant, car, bicycle, dog`.
+   - Excluded class `door` from bounding-box detector, keeping door detection in `HazardClassifier.kt` via ImageLabeler.
+   - Suppressed bounding-box obstacles covering less than 6% of the frame area as background noise.
+   - Updated `SpatialClassifier.kt` to unified distance scale:
+     - `>= 0.28`: `DistanceCategory.NEAR` ("Вплотную, {объект}!")
+     - `>= 0.12`: `DistanceCategory.MEDIUM` ("Впереди {объект}")
+     - `0.06..0.12`: `DistanceCategory.FAR` (tracked silently)
+     - `< 0.06`: completely ignored.
+
+2. **Free Corridor Navigation & Russian Voice Alerts (Phase 4 & 5)**:
+   - Implemented corridor bypass recommendations in `CenterObstacleAlertStrategy`:
+     - If left flank is free: `"Прямо {объект}, обойдите слева"`
+     - If left is blocked and right is free: `"Прямо {объект}, обойдите справа"`
+     - If both flanks blocked: `"Впереди {объект}"`
+     - In close proximity (NEAR): `"Вплотную, {объект}!"` (urgent = true).
+   - Created `ObstacleTranslator.kt` for Russian translations of obstacle labels.
+   - Translated all alert strategies to Russian:
+     - `StairsAlertStrategy`: `"Осторожно, впереди лестница!"` (urgent)
+     - `WallProximityAlertStrategy`: `"Внимание, стена прямо по курсу!"` (urgent)
+     - `ArmrestAlertStrategy`: `"Подлокотник {слева/справа/впереди}"`
+     - `DoorAheadAlertStrategy`: `"Впереди дверной проём"`
+   - Switched `AndroidVoiceAlertService.kt` to `Locale("ru", "RU")` with graceful fallback to `Locale.getDefault()` if missing or unsupported.
+   - Updated Russian localized strings in `res/values/strings.xml`.
+
+3. **Bluetooth SPP Client & Permissions (Phase 6)**:
+   - Implemented `BluetoothCaneClient.kt` with SPP UUID `00001101-0000-1000-8000-00805F9B34FB` on `Dispatchers.IO`.
+   - Strict unidirectional Cane -> Phone communication: no write/send operations exist.
+   - Handles `BLUETOOTH_CONNECT` runtime permissions for Android 12+ alongside camera permissions in `MainScreen.kt`.
+
+4. **Sensor Fusion Pipeline & Priority Arbitration (Phase 7, 8 & 8.5)**:
+   - Priority matching in `EvaluateSensorFusionUseCase`:
+     - Cane direction matching camera obstacle zone (LEFT/RIGHT): immediate urgent alert `"Осторожно, слева/справа преграда!"`.
+     - Critical cane distance (< 35 cm): immediate urgent alert `"Внимание, близко препятствие: {N} см!"`.
+   - Integrated `BluetoothCaneClient` and `EvaluateSensorFusionUseCase` into `MainViewModel.kt` and `ArgusApplication.kt`.
+   - Coordinated environmental hazards and sensor fusion decisions in `MainViewModel` to avoid alert collisions.
+
+5. **Status Screen & Jury Demo Mode (Phase 9)**:
+   - Added high-contrast status panels in `CameraPreviewView.kt`:
+     - «ДИСТАНЦИЯ ТРОСТИ: XX СМ» (color-coded: red < 35 cm, green > 50 cm, amber 35-50 cm, dark gray when disconnected).
+     - «КУРС: ПРЯМО / ВЛЕВО / ВПРАВО».
+   - Added «ТЕСТ / КАЛИБРОВКА» button: attempts soft reconnect if active, or triggers local simulated telemetry sequence for jury presentation without sending data to cane socket.
+
+6. **Tests & Verification (Phase 10)**:
+   - Updated and expanded unit tests across `VisionResultProcessorTest.kt`, `EvaluateHazardsUseCaseTest.kt`, `EvaluateSensorFusionUseCaseTest.kt`, and `MainViewModelTest.kt`.
+   - All tests passing: `./gradlew testDebugUnitTest` successful.
+   - Debug build verified: `./gradlew assembleDebug` successful.
+
+

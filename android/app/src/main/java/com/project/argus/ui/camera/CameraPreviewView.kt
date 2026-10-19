@@ -7,14 +7,18 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
@@ -37,6 +41,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.project.argus.R
 import com.project.argus.data.vision.VisionAnalyzer
+import com.project.argus.domain.model.CaneDirection
 import com.project.argus.domain.model.HorizontalZone
 import com.project.argus.domain.model.SpatialHazard
 import com.project.argus.domain.model.VisionFrameResult
@@ -52,6 +57,7 @@ import java.util.concurrent.Executors
 fun CameraPreviewScreen(
     uiState: MainUiState,
     onFrameAnalyzed: (VisionFrameResult) -> Unit,
+    onTestCalibrationClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -173,7 +179,7 @@ fun CameraPreviewScreen(
             }
         }
 
-        // 3. Top Spatial Hazard Indicators
+        // 3. Top Spatial Hazard Indicators & Cane Telemetry Overlay
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -222,6 +228,104 @@ fun CameraPreviewScreen(
                     SpatialHazard.None -> Unit
                 }
                 Spacer(modifier = Modifier.height(6.dp))
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Cane Telemetry Panels
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Panel: Cane Distance
+                Card(
+                    modifier = Modifier.weight(1f),
+                    colors = CardDefaults.cardColors(
+                        containerColor = when {
+                            uiState.caneDistanceCm == null -> Color(0xFF263238).copy(alpha = 0.9f)
+                            uiState.caneDistanceCm < 35 -> Color(0xFFD32F2F)
+                            uiState.caneDistanceCm > 50 -> Color(0xFF2E7D32)
+                            else -> Color(0xFFE65100)
+                        }
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "ДИСТАНЦИЯ ТРОСТИ",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = uiState.caneDistanceCm?.let { "$it СМ" } ?: "--",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
+
+                // Panel: Cane Direction / Course
+                Card(
+                    modifier = Modifier.weight(1f),
+                    colors = CardDefaults.cardColors(
+                        containerColor = when (uiState.caneDirection) {
+                            CaneDirection.LEFT -> Color(0xFF1565C0)
+                            CaneDirection.RIGHT -> Color(0xFF00838F)
+                            CaneDirection.CENTER -> Color(0xFF37474F)
+                        }
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "КУРС",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = when (uiState.caneDirection) {
+                                CaneDirection.LEFT -> "ВЛЕВО"
+                                CaneDirection.RIGHT -> "ВПРАВО"
+                                CaneDirection.CENTER -> "ПРЯМО"
+                            },
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Test / Calibration Button (Read-only on socket, triggers demo or reconnect)
+            Button(
+                onClick = onTestCalibrationClicked,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF00897B)
+                ),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = "ТЕСТ / КАЛИБРОВКА",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 

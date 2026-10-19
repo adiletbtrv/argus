@@ -6,6 +6,8 @@ import com.project.argus.domain.model.SpatialHazard
 import com.project.argus.domain.model.VisionFrameResult
 import java.util.Locale
 
+import com.project.argus.domain.model.ObstacleTranslator
+
 // Result of evaluating hazards, containing speech prompt and filtered spatial hazards.
 data class AlertDecision(
     val spokenText: String?,
@@ -30,7 +32,7 @@ internal class StairsAlertStrategy : AlertStrategy {
         val stairs = validatedHazards.filterIsInstance<SpatialHazard.StairsAhead>().firstOrNull()
             ?: return null
         return AlertDecision(
-            spokenText = "Caution, stairs ahead!",
+            spokenText = "Осторожно, впереди лестница!",
             isUrgent = true,
             validatedHazards = validatedHazards
         )
@@ -46,7 +48,7 @@ internal class WallProximityAlertStrategy : AlertStrategy {
         val wall = validatedHazards.filterIsInstance<SpatialHazard.WallProximity>().firstOrNull()
             ?: return null
         return AlertDecision(
-            spokenText = "Warning, wall directly ahead!",
+            spokenText = "Внимание, стена прямо по курсу!",
             isUrgent = true,
             validatedHazards = validatedHazards
         )
@@ -62,12 +64,12 @@ internal class ArmrestAlertStrategy : AlertStrategy {
         val armrest = validatedHazards.filterIsInstance<SpatialHazard.ArmrestDetected>().firstOrNull()
             ?: return null
         val side = when (armrest.zone) {
-            HorizontalZone.LEFT -> "on the left"
-            HorizontalZone.RIGHT -> "on the right"
-            HorizontalZone.CENTER -> "ahead"
+            HorizontalZone.LEFT -> "слева"
+            HorizontalZone.RIGHT -> "справа"
+            HorizontalZone.CENTER -> "впереди"
         }
         return AlertDecision(
-            spokenText = "Armrest $side",
+            spokenText = "Подлокотник $side",
             isUrgent = false,
             validatedHazards = validatedHazards
         )
@@ -83,14 +85,14 @@ internal class DoorAheadAlertStrategy : AlertStrategy {
         val door = validatedHazards.filterIsInstance<SpatialHazard.DoorAhead>().firstOrNull()
             ?: return null
         return AlertDecision(
-            spokenText = "Doorway ahead",
+            spokenText = "Впереди дверной проём",
             isUrgent = false,
             validatedHazards = validatedHazards
         )
     }
 }
 
-// Handles nearby or medium obstacles in the direct center collision path.
+// Handles obstacles in direct center path with corridor bypass recommendations.
 internal class CenterObstacleAlertStrategy : AlertStrategy {
     override fun evaluate(
         validatedHazards: List<SpatialHazard>,
@@ -102,17 +104,33 @@ internal class CenterObstacleAlertStrategy : AlertStrategy {
                  it.estimatedDistanceCategory == DistanceCategory.MEDIUM)
         } ?: return null
 
-        val spokenLabel = if (centerObstacle.label.equals("TV", ignoreCase = true)) {
-            "TV"
-        } else {
-            centerObstacle.label.lowercase(Locale.ROOT)
+        val label = ObstacleTranslator.translate(centerObstacle.label)
+
+        if (centerObstacle.estimatedDistanceCategory == DistanceCategory.NEAR) {
+            return AlertDecision(
+                spokenText = "Вплотную, $label!",
+                isUrgent = true,
+                validatedHazards = validatedHazards
+            )
         }
 
-        val prompt = if (centerObstacle.estimatedDistanceCategory == DistanceCategory.NEAR) {
-            "Careful, $spokenLabel right ahead"
-        } else {
-            "${centerObstacle.label} ahead"
+        val leftBlocked = frame.obstacles.any {
+            it.zone == HorizontalZone.LEFT &&
+                (it.estimatedDistanceCategory == DistanceCategory.NEAR ||
+                 it.estimatedDistanceCategory == DistanceCategory.MEDIUM)
         }
+        val rightBlocked = frame.obstacles.any {
+            it.zone == HorizontalZone.RIGHT &&
+                (it.estimatedDistanceCategory == DistanceCategory.NEAR ||
+                 it.estimatedDistanceCategory == DistanceCategory.MEDIUM)
+        }
+
+        val prompt = when {
+            !leftBlocked -> "Прямо $label, обойдите слева"
+            !rightBlocked -> "Прямо $label, обойдите справа"
+            else -> "Впереди $label"
+        }
+
         return AlertDecision(
             spokenText = prompt,
             isUrgent = false,

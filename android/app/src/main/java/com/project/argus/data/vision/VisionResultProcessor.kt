@@ -5,6 +5,7 @@ import com.project.argus.domain.model.VisionFrameResult
 
 /**
  * Responsible solely for orchestrating the vision post-processing pipeline:
+ * filters allowed COCO obstacle classes and suppresses noise below area threshold,
  * delegates hazard classification to [HazardClassifier], geometry to [SpatialClassifier],
  * and label formatting to [LabelFormatter].
  */
@@ -13,6 +14,25 @@ class VisionResultProcessor(
     private val spatialClassifier: SpatialClassifier = SpatialClassifier(),
     private val labelFormatter: LabelFormatter = LabelFormatter()
 ) : VisionProcessor {
+
+    companion object {
+        val ALLOWED_OBJECT_CLASSES = setOf(
+            "person",
+            "chair",
+            "dining table",
+            "bench",
+            "backpack",
+            "suitcase",
+            "potted plant",
+            "car",
+            "bicycle",
+            "dog"
+        )
+    }
+
+    fun isAllowedObject(label: String): Boolean {
+        return ALLOWED_OBJECT_CLASSES.contains(label.trim().lowercase())
+    }
 
     override fun process(
         detectedObjects: List<RawDetectedObject>,
@@ -25,9 +45,13 @@ class VisionResultProcessor(
             "${labelFormatter.format(label.text)} (${(label.confidence * 100).toInt()}%)"
         }
 
+        val totalArea = (imageWidth * imageHeight).toFloat()
+
         val validObjects = detectedObjects.filter { obj ->
-            val topLabel = obj.labels.firstOrNull()?.text?.trim()
-            topLabel != null && topLabel != "???"
+            val topLabel = obj.labels.firstOrNull()?.text?.trim()?.lowercase()
+            val isAllowed = topLabel != null && topLabel in ALLOWED_OBJECT_CLASSES
+            val isNotIgnored = !spatialClassifier.isIgnored(obj.boundingBox.area(), totalArea)
+            isAllowed && isNotIgnored
         }
 
         val hazards = hazardClassifier.classify(
@@ -36,7 +60,6 @@ class VisionResultProcessor(
         )
 
         val isArmrestDominant = hazards.any { it is com.project.argus.domain.model.SpatialHazard.ArmrestDetected }
-        val totalArea = (imageWidth * imageHeight).toFloat()
 
         val obstacles = validObjects.mapIndexed { index, mlObject ->
             val box = mlObject.boundingBox

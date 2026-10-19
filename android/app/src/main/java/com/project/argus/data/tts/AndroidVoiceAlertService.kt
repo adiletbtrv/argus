@@ -35,9 +35,11 @@ class AndroidVoiceAlertService(context: Context) : VoiceAlertService, TextToSpee
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             val engine = tts ?: return
-            val result = engine.setLanguage(Locale.US)
+            val ruLocale = Locale("ru", "RU")
+            val result = engine.setLanguage(ruLocale)
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                engine.setLanguage(Locale.ENGLISH)
+                Log.w(TAG, "Russian TTS not supported, falling back to default locale")
+                engine.setLanguage(Locale.getDefault())
             }
             engine.setSpeechRate(1.05f)
 
@@ -62,7 +64,7 @@ class AndroidVoiceAlertService(context: Context) : VoiceAlertService, TextToSpee
             })
 
             isReady.set(true)
-            Log.d(TAG, "TTS initialized successfully with English locale.")
+            Log.d(TAG, "TTS initialized successfully.")
         } else {
             Log.e(TAG, "TTS initialization failed with status $status")
         }
