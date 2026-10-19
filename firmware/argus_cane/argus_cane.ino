@@ -48,6 +48,11 @@ unsigned long lastPulseToggle = 0;
 bool pulseState = false;
 unsigned long pulseIntervalMs = 0;
 
+// переменные и интервал периодической телеметрии
+long currentDist = -1;
+unsigned long lastTelemetryMs = 0;
+const unsigned long TELEMETRY_INTERVAL_MS = 180; // периодичность отправки (150-200 мс)
+
 long readDistanceCm() {
   digitalWrite(PIN_TRIG, LOW);
   delayMicroseconds(2);
@@ -198,14 +203,19 @@ void loop() {
   unsigned long now = millis();
   if (now - lastDistanceCheckMs >= DISTANCE_CHECK_INTERVAL_MS) {
     lastDistanceCheckMs = now;
-    long dist = readDistanceCm();
+    currentDist = readDistanceCm();
 
-    if (dist > 0 && dist <= OBSTACLE_THRESHOLD_CM) {
-      pulseIntervalMs = map(constrain(dist, 5, 50), 5, 50, 40, 400);
-      sendTelemetry(dist, currentDir);
+    if (currentDist > 0 && currentDist <= OBSTACLE_THRESHOLD_CM) {
+      pulseIntervalMs = map(constrain(currentDist, 5, 50), 5, 50, 40, 400);
     } else {
       pulseIntervalMs = 0;
     }
+  }
+
+  // периодическая отправка телеметрии каждые 180 мс
+  if (now - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
+    lastTelemetryMs = now;
+    sendTelemetry(currentDist, currentDir);
   }
 
   // обновление конечного автомата вибрации
