@@ -38,6 +38,7 @@ SoftwareSerial btSerial(BT_RX_PIN, BT_TX_PIN);
 MPU6050 mpu(Wire);
 DirectionClassifier classifier;
 Direction lastReportedDir = Direction::CENTER;
+float rollOffset = 0.0f; // программное смещение нуля по крену
 
 unsigned long lastDistanceCheckMs = 0;
 const unsigned long DISTANCE_CHECK_INTERVAL_MS = 60;
@@ -129,6 +130,7 @@ void setup() {
   btSerial.begin(9600);
   btSerial.stopListening(); // отключаем прерывания RX: трость только передает, входящие байты игнорируются
   Wire.begin();
+  Wire.setWireTimeout(3000, true); // сброс I2C при зависании SDA/SCL > 3 мс
 
   // настройка выходов 74HC138
   pinMode(PIN_A, OUTPUT);
@@ -162,13 +164,23 @@ void setup() {
   // при калибровке трость должна стоять вертикально и неподвижно
   Serial.println(F("Калибровка гироскопа и акселерометра MPU6050..."));
   mpu.calcOffsets();
+
+  // усреднение первых 20 отсчетов крена для нулевой точки
+  float rollSum = 0;
+  for (int i = 0; i < 20; i++) {
+    mpu.update();
+    rollSum += mpu.getAngleX();
+    delay(5);
+  }
+  rollOffset = rollSum / 20.0f;
+
   Serial.println(F("Готово к работе."));
 }
 
 void loop() {
   // опрос датчика положения и классификация направления поворота
   mpu.update();
-  float roll = mpu.getAngleX();
+  float roll = mpu.getAngleX() - rollOffset;
   Direction currentDir = classifier.classify(roll, millis());
 
   if (currentDir != lastReportedDir) {
