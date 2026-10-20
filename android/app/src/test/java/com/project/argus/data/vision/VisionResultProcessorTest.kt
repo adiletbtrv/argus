@@ -13,7 +13,6 @@ import org.junit.Test
 /**
  * Unit tests for the vision pipeline components:
  * [HazardClassifier], [SpatialClassifier], [LabelFormatter], and [VisionResultProcessor].
- * Each class is tested in isolation per [SRP].
  */
 class VisionResultProcessorTest {
 
@@ -101,7 +100,7 @@ class VisionResultProcessorTest {
         assertEquals(0.60f, doorHazard!!.confidence, 0.001f)
     }
 
-    // SpatialClassifier: geometry in isolation
+    // SpatialClassifier: geometry and unified scale
 
     @Test
     fun `SpatialClassifier - classifyZone returns LEFT CENTER and RIGHT`() {
@@ -114,13 +113,20 @@ class VisionResultProcessorTest {
     }
 
     @Test
-    fun `SpatialClassifier - classifyDistance maps area fractions to NEAR MEDIUM FAR`() {
+    fun `SpatialClassifier - classifyDistance maps area fractions to NEAR MEDIUM FAR and ignores below 6 percent`() {
         val classifier = SpatialClassifier()
         val totalArea = 1_000_000f // 1000 x 1000
 
-        assertEquals(DistanceCategory.NEAR, classifier.classifyDistance(boxArea = 360_000f, totalArea = totalArea))   // 36%
-        assertEquals(DistanceCategory.MEDIUM, classifier.classifyDistance(boxArea = 160_000f, totalArea = totalArea)) // 16%
-        assertEquals(DistanceCategory.FAR, classifier.classifyDistance(boxArea = 40_000f, totalArea = totalArea))     // 4%
+        // >= 0.28 -> NEAR
+        assertEquals(DistanceCategory.NEAR, classifier.classifyDistance(boxArea = 300_000f, totalArea = totalArea))
+        // 0.12..0.28 -> MEDIUM
+        assertEquals(DistanceCategory.MEDIUM, classifier.classifyDistance(boxArea = 150_000f, totalArea = totalArea))
+        // 0.06..0.12 -> FAR
+        assertEquals(DistanceCategory.FAR, classifier.classifyDistance(boxArea = 80_000f, totalArea = totalArea))
+
+        // < 0.06 -> Ignored completely
+        assertTrue(classifier.isIgnored(boxArea = 50_000f, totalArea = totalArea))
+        assertFalse(classifier.isIgnored(boxArea = 70_000f, totalArea = totalArea))
     }
 
     // LabelFormatter: string sanitization in isolation
@@ -145,17 +151,45 @@ class VisionResultProcessorTest {
         assertTrue(hazardClassifier.isArmrestObject("chair", isArmrestDominant = true))
     }
 
+    // VisionResultProcessor: allow-list and area filter
+
     @Test
-    fun `VisionResultProcessor - drops placeholder labels`() {
+    fun `VisionResultProcessor - filters allowed COCO classes only`() {
+        val processor = VisionResultProcessor()
+        assertTrue(processor.isAllowedObject("person"))
+        assertTrue(processor.isAllowedObject("chair"))
+        assertTrue(processor.isAllowedObject("dining table"))
+        assertTrue(processor.isAllowedObject("bench"))
+        assertTrue(processor.isAllowedObject("backpack"))
+        assertTrue(processor.isAllowedObject("suitcase"))
+        assertTrue(processor.isAllowedObject("potted plant"))
+        assertTrue(processor.isAllowedObject("car"))
+        assertTrue(processor.isAllowedObject("bicycle"))
+        assertTrue(processor.isAllowedObject("dog"))
+
+        assertFalse(processor.isAllowedObject("bottle"))
+        assertFalse(processor.isAllowedObject("door"))
+        assertFalse(processor.isAllowedObject("tv"))
+    }
+
+    @Test
+    fun `VisionResultProcessor - drops unallowed classes and small objects below 6 percent`() {
         val processor = VisionResultProcessor()
         val objects = listOf(
+            // Allowed class but area < 6% (30x30 = 900 on 1000x1000 = 0.09%) -> dropped
             RawDetectedObject(
-                boundingBox = BoundingBox2D(100f, 100f, 300f, 300f),
-                labels = listOf(RawLabel("???", 0.90f))
+                boundingBox = BoundingBox2D(100f, 100f, 130f, 130f),
+                labels = listOf(RawLabel("chair", 0.90f))
             ),
+            // Unallowed class (bottle) -> dropped
             RawDetectedObject(
-                boundingBox = BoundingBox2D(400f, 100f, 600f, 300f),
-                labels = listOf(RawLabel("chair", 0.85f))
+                boundingBox = BoundingBox2D(100f, 100f, 500f, 500f),
+                labels = listOf(RawLabel("bottle", 0.90f))
+            ),
+            // Allowed class (person) with area >= 6% (300x300 = 90000 on 1000x1000 = 9%) -> kept
+            RawDetectedObject(
+                boundingBox = BoundingBox2D(400f, 100f, 700f, 400f),
+                labels = listOf(RawLabel("person", 0.85f))
             )
         )
 
@@ -167,11 +201,8 @@ class VisionResultProcessorTest {
         )
 
         assertEquals(1, result.obstacles.size)
-        assertEquals("Chair", result.obstacles[0].label)
+        assertEquals("Person", result.obstacles[0].label)
     }
-
-
-    // VisionResultProcessor: orchestration integration test
 
     @Test
     fun `VisionResultProcessor - obstacle label remapped to Armrest when armrest dominant`() {
@@ -179,12 +210,8 @@ class VisionResultProcessorTest {
         val labels = listOf(RawLabel("Armrest", 0.50f))
         val objects = listOf(
             RawDetectedObject(
-                boundingBox = BoundingBox2D(100f, 100f, 300f, 300f),
-                labels = listOf(RawLabel("couch", 0.70f))
-            ),
-            RawDetectedObject(
-                boundingBox = BoundingBox2D(400f, 100f, 600f, 300f),
-                labels = listOf(RawLabel("Bottle", 0.70f))
+                boundingBox = BoundingBox2D(100f, 100f, 400f, 400f),
+                labels = listOf(RawLabel("chair", 0.70f))
             )
         )
 
@@ -195,10 +222,9 @@ class VisionResultProcessorTest {
             imageHeight = 1000
         )
 
+        assertEquals(1, result.obstacles.size)
         assertEquals("Armrest", result.obstacles[0].label)
         assertTrue(result.obstacles[0].isArmrest)
-        assertEquals("Bottle", result.obstacles[1].label)
-        assertFalse(result.obstacles[1].isArmrest)
     }
 
     @Test
@@ -206,8 +232,8 @@ class VisionResultProcessorTest {
         val processor = VisionResultProcessor()
         val objects = listOf(
             RawDetectedObject(
-                boundingBox = BoundingBox2D(left = 50f, top = 100f, right = 200f, bottom = 300f),
-                labels = listOf(RawLabel("Chair", 0.8f))
+                boundingBox = BoundingBox2D(left = 50f, top = 100f, right = 350f, bottom = 400f),
+                labels = listOf(RawLabel("chair", 0.8f))
             )
         )
         val labels = listOf(RawLabel("Door", 0.65f))

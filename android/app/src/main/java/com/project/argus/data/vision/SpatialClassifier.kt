@@ -19,14 +19,30 @@ class SpatialClassifier {
     /**
      * Determines distance category from the fraction of the total frame area
      * covered by the bounding box.
-     * NEAR > 35% | MEDIUM 10%–35% | FAR < 10%.
+     * NEAR: >= 28% ("Вплотную, {объект}!")
+     * MEDIUM: 12% - 28% ("Впереди {объект}")
+     * FAR: 6% - 12% (tracked silently)
      */
     fun classifyDistance(boxArea: Float, totalArea: Float): DistanceCategory {
         val fraction = if (totalArea > 0f) boxArea / totalArea else 0f
         return when {
-            fraction > 0.35f -> DistanceCategory.NEAR
-            fraction > 0.10f -> DistanceCategory.MEDIUM
+            fraction >= THRESHOLD_NEAR -> DistanceCategory.NEAR
+            fraction >= THRESHOLD_MEDIUM -> DistanceCategory.MEDIUM
             else -> DistanceCategory.FAR
         }
+    }
+
+    /**
+     * Objects covering less than 6% of the frame area are ignored completely.
+     */
+    fun isIgnored(boxArea: Float, totalArea: Float): Boolean {
+        val fraction = if (totalArea > 0f) boxArea / totalArea else 0f
+        return fraction < THRESHOLD_IGNORE
+    }
+
+    companion object {
+        const val THRESHOLD_NEAR = 0.28f
+        const val THRESHOLD_MEDIUM = 0.12f
+        const val THRESHOLD_IGNORE = 0.06f
     }
 }

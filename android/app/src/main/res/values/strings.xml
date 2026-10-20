@@ -1,19 +1,19 @@
 <resources>
     <string name="app_name">Argus</string>
     <string name="app_tagline">ARGUS VISION</string>
-    <string name="camera_permission_rationale">Argus requires camera access to scan your environment, detect obstacles, identify stairs, walls, and provide real-time voice assistance.</string>
-    <string name="grant_camera_permission">Grant Camera Access</string>
-    <string name="status_scanning">ARGUS VISION: SCANNING</string>
-    <string name="waiting_for_camera">Waiting for camera feed…</string>
-    <string name="detected_objects">Detected objects: %1$d</string>
-    <string name="in_path">In path: %1$s</string>
-    <string name="scene_labels">Scene: %1$s</string>
-    <string name="hazard_stairs_title">⚠️ CAUTION: STAIRS AHEAD</string>
-    <string name="hazard_stairs_sub">Confidence: %1$d%%</string>
-    <string name="hazard_armrest_title">🪑 ARMREST / FURNITURE</string>
-    <string name="hazard_armrest_sub">Confidence: %1$d%%</string>
-    <string name="hazard_wall_title">🧱 WARNING: WALL DIRECTLY AHEAD</string>
-    <string name="hazard_wall_sub">Obstacle directly in path</string>
-    <string name="hazard_door_title">🚪 DOORWAY AHEAD</string>
-    <string name="hazard_door_sub">Confidence: %1$d%%</string>
+    <string name="camera_permission_rationale">Системе Argus необходим доступ к камере для сканирования пространства, обнаружения препятствий, лестниц, дверей и голосового сопровождения.</string>
+    <string name="grant_camera_permission">Предоставить доступ к камере</string>
+    <string name="status_scanning">ARGUS VISION: СКАНИРОВАНИЕ</string>
+    <string name="waiting_for_camera">Ожидание видеопотока камеры…</string>
+    <string name="detected_objects">Обнаружено объектов: %1$d</string>
+    <string name="in_path">По курсу: %1$s</string>
+    <string name="scene_labels">Сцена: %1$s</string>
+    <string name="hazard_stairs_title">⚠️ ОСТОРОЖНО: ЛЕСТНИЦА ВПЕРЕДИ</string>
+    <string name="hazard_stairs_sub">Уверенность: %1$d%%</string>
+    <string name="hazard_armrest_title">🪑 ПОДЛОКОТНИК / МЕБЕЛЬ</string>
+    <string name="hazard_armrest_sub">Уверенность: %1$d%%</string>
+    <string name="hazard_wall_title">🧱 ВНИМАНИЕ: СТЕНА ПРЯМО ПО КУРСУ</string>
+    <string name="hazard_wall_sub">Препятствие на пути</string>
+    <string name="hazard_door_title">🚪 ВПЕРЕДИ ДВЕРНОЙ ПРОЁМ</string>
+    <string name="hazard_door_sub">Уверенность: %1$d%%</string>
 </resources>

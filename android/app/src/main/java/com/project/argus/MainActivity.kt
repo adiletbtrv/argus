@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
                         onPermissionResult = viewModel::onCameraPermissionResult,
                         onInitialCheck = viewModel::onInitialPermissionCheck,
                         onFrameAnalyzed = viewModel::onFrameAnalyzed,
+                        onTestCalibrationClicked = viewModel::onTestCalibrationClicked,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
