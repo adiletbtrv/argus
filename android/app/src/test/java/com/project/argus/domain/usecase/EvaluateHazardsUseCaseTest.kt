@@ -159,8 +159,80 @@ class EvaluateHazardsUseCaseTest {
 
         val decision = useCase(frame)
 
-        assertEquals("Впереди дверной проём", decision.spokenText)
+        assertEquals("Впереди дверной проем", decision.spokenText)
         assertFalse(decision.isUrgent)
+    }
+
+    @Test
+    fun `near center obstacle takes priority over doorway and armrest`() {
+        val frame = VisionFrameResult(
+            spatialHazards = listOf(
+                SpatialHazard.ArmrestDetected(0.7f, HorizontalZone.LEFT),
+                SpatialHazard.DoorAhead(0.8f)
+            ),
+            obstacles = listOf(
+                DetectedObstacle(
+                    id = 1,
+                    label = "dining table",
+                    confidence = 0.9f,
+                    boundingBox = BoundingBox2D(200f, 200f, 800f, 800f),
+                    zone = HorizontalZone.CENTER,
+                    estimatedDistanceCategory = DistanceCategory.NEAR
+                )
+            )
+        )
+
+        val decision = useCase(frame)
+
+        assertEquals("Вплотную, стол!", decision.spokenText)
+        assertTrue(decision.isUrgent)
+        assertEquals(3, decision.priority)
+    }
+
+    @Test
+    fun `door ahead takes priority over medium center obstacle`() {
+        val frame = VisionFrameResult(
+            spatialHazards = listOf(SpatialHazard.DoorAhead(0.75f)),
+            obstacles = listOf(
+                DetectedObstacle(
+                    id = 1,
+                    label = "chair",
+                    confidence = 0.9f,
+                    boundingBox = BoundingBox2D(350f, 250f, 650f, 750f),
+                    zone = HorizontalZone.CENTER,
+                    estimatedDistanceCategory = DistanceCategory.MEDIUM
+                )
+            )
+        )
+
+        val decision = useCase(frame)
+
+        assertEquals("Впереди дверной проем", decision.spokenText)
+        assertFalse(decision.isUrgent)
+        assertEquals(4, decision.priority)
+    }
+
+    @Test
+    fun `armrest takes priority over medium center obstacle`() {
+        val frame = VisionFrameResult(
+            spatialHazards = listOf(SpatialHazard.ArmrestDetected(0.65f, HorizontalZone.RIGHT)),
+            obstacles = listOf(
+                DetectedObstacle(
+                    id = 1,
+                    label = "chair",
+                    confidence = 0.9f,
+                    boundingBox = BoundingBox2D(350f, 250f, 650f, 750f),
+                    zone = HorizontalZone.CENTER,
+                    estimatedDistanceCategory = DistanceCategory.MEDIUM
+                )
+            )
+        )
+
+        val decision = useCase(frame)
+
+        assertEquals("Подлокотник справа", decision.spokenText)
+        assertFalse(decision.isUrgent)
+        assertEquals(4, decision.priority)
     }
 
     // 3. Obstacle Collision Warnings in Center Zone

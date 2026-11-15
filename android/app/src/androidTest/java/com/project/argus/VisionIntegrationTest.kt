@@ -49,10 +49,10 @@ class VisionIntegrationTest {
         val processor = VisionResultProcessor()
         val evaluateUseCase = EvaluateHazardsUseCase()
 
-        // 1. Simulate ML Kit detection of a prominent obstacle in center
+        // 1. Simulate MediaPipe object detection of a medium chair in center and ML Kit Door label
         val detectedObject = RawDetectedObject(
-            boundingBox = BoundingBox2D(left = 300f, top = 200f, right = 700f, bottom = 800f),
-            labels = listOf(RawLabel("Obstacle", 0.90f))
+            boundingBox = BoundingBox2D(left = 350f, top = 250f, right = 650f, bottom = 750f),
+            labels = listOf(RawLabel("chair", 0.90f))
         )
         val imageLabels = listOf(
             RawLabel("Door", 0.65f)
@@ -68,13 +68,13 @@ class VisionIntegrationTest {
         // Verify Vision Processing
         assertEquals(1, frameResult.obstacles.size)
         assertEquals(HorizontalZone.CENTER, frameResult.obstacles[0].zone)
-        assertEquals(DistanceCategory.NEAR, frameResult.obstacles[0].estimatedDistanceCategory)
+        assertEquals(DistanceCategory.MEDIUM, frameResult.obstacles[0].estimatedDistanceCategory)
         assertTrue(frameResult.spatialHazards.any { it is SpatialHazard.DoorAhead })
 
-        //Evaluate Hazards via Use Case
+        // Evaluate Hazards via Use Case
         val decision = evaluateUseCase(frameResult)
         assertNotNull(decision)
-        // DoorAhead has priority over center obstacle according to hierarchy
-        assertEquals("Doorway ahead", decision.spokenText)
+        // DoorAhead (Priority 4) has priority over medium center obstacle (Priority 5)
+        assertEquals("Впереди дверной проем", decision.spokenText)
     }
 }
