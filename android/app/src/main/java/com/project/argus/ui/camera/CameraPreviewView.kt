@@ -41,6 +41,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.project.argus.R
 import com.project.argus.data.vision.VisionAnalyzer
+import com.project.argus.domain.bluetooth.BluetoothConnectionStatus
 import com.project.argus.domain.model.CaneDirection
 import com.project.argus.domain.model.HorizontalZone
 import com.project.argus.domain.model.SpatialHazard
@@ -305,6 +306,31 @@ fun CameraPreviewScreen(
                         )
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            val (btStatusLabel, btStatusColor) = when (uiState.bluetoothStatus) {
+                BluetoothConnectionStatus.CONNECTED -> "БЛЮТУЗ: ПОДКЛЮЧЕНО" to Color(0xFF2E7D32)
+                BluetoothConnectionStatus.CONNECTING -> "БЛЮТУЗ: ПОИСК HC-05..." to Color(0xFFE65100)
+                BluetoothConnectionStatus.DEMO_MODE -> "БЛЮТУЗ: ДЕМО" to Color(0xFF1565C0)
+                BluetoothConnectionStatus.DISCONNECTED,
+                BluetoothConnectionStatus.PERMISSION_REQUIRED,
+                BluetoothConnectionStatus.ERROR -> "БЛЮТУЗ: НЕТ СВЯЗИ" to Color(0xFF455A64)
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = btStatusColor),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = btStatusLabel,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))

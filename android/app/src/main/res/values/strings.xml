@@ -14,6 +14,6 @@
     <string name="hazard_armrest_sub">Уверенность: %1$d%%</string>
     <string name="hazard_wall_title">🧱 ВНИМАНИЕ: СТЕНА ПРЯМО ПО КУРСУ</string>
     <string name="hazard_wall_sub">Препятствие на пути</string>
-    <string name="hazard_door_title">🚪 ВПЕРЕДИ ДВЕРНОЙ ПРОЁМ</string>
+    <string name="hazard_door_title">🚪 ВПЕРЕДИ ДВЕРНОЙ ПРОЕМ</string>
     <string name="hazard_door_sub">Уверенность: %1$d%%</string>
 </resources>

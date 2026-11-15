@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.project.argus.ArgusApplication
+import com.project.argus.domain.bluetooth.BluetoothConnectionStatus
 import com.project.argus.domain.bluetooth.CaneBluetoothClient
 import com.project.argus.domain.model.CaneDirection
 import com.project.argus.domain.model.VisionFrameResult
@@ -88,32 +89,37 @@ class MainViewModel(
         }
     }
 
+    fun onBluetoothPermissionResult(granted: Boolean) {
+        if (granted) {
+            val status = bluetoothClient.connectionStatus.value
+            if (status != BluetoothConnectionStatus.CONNECTED &&
+                status != BluetoothConnectionStatus.CONNECTING
+            ) {
+                bluetoothClient.connect()
+            }
+        } else {
+            _uiState.update { it.copy(bluetoothStatus = BluetoothConnectionStatus.PERMISSION_REQUIRED) }
+        }
+    }
+
     fun onFrameAnalyzed(result: VisionFrameResult) {
         viewModelScope.launch(defaultDispatcher) {
             val hazardsDecision = evaluateHazardsUseCase(result)
             val currentTelemetry = bluetoothClient.telemetryFlow.value
             val fusionDecision = evaluateSensorFusionUseCase(result, currentTelemetry)
 
+            val useFusion = fusionDecision.spokenText != null &&
+                (hazardsDecision.spokenText == null || fusionDecision.priority < hazardsDecision.priority)
+
             val textToSpeak: String?
             val isUrgent: Boolean
 
-            when {
-                hazardsDecision.spokenText != null && hazardsDecision.isUrgent -> {
-                    textToSpeak = hazardsDecision.spokenText
-                    isUrgent = true
-                }
-                fusionDecision.spokenText != null -> {
-                    textToSpeak = fusionDecision.spokenText
-                    isUrgent = fusionDecision.isUrgent
-                }
-                hazardsDecision.spokenText != null -> {
-                    textToSpeak = hazardsDecision.spokenText
-                    isUrgent = hazardsDecision.isUrgent
-                }
-                else -> {
-                    textToSpeak = null
-                    isUrgent = false
-                }
+            if (useFusion) {
+                textToSpeak = fusionDecision.spokenText
+                isUrgent = fusionDecision.isUrgent
+            } else {
+                textToSpeak = hazardsDecision.spokenText
+                isUrgent = hazardsDecision.isUrgent
             }
 
             if (textToSpeak != null) {
