@@ -99,7 +99,24 @@ class EvaluateSensorFusionUseCaseTest {
     }
 
     @Test
-    fun invoke_centerObstacle_withLeftFree_recommendsBypassLeft() {
+    fun invoke_criticalSonar_overridesSideConflict() {
+        val frame = VisionFrameResult(
+            obstacles = listOf(
+                createObstacle("chair", HorizontalZone.LEFT, DistanceCategory.MEDIUM)
+            )
+        )
+        val telemetry = CaneTelemetry(distanceCm = 25, direction = CaneDirection.LEFT)
+
+        val decision = useCase(frame, telemetry)
+
+        assertTrue(decision.isUrgent)
+        assertEquals(EvaluateSensorFusionUseCase.PRIORITY_CRITICAL_SONAR, decision.priority)
+        assertEquals("Внимание, близко препятствие: 25 см!", decision.spokenText)
+        assertEquals("STOP", decision.recommendedAction)
+    }
+
+    @Test
+    fun invoke_centerObstacleAlone_returnsNullAndDelegatesToHazardStrategies() {
         val frame = VisionFrameResult(
             obstacles = listOf(
                 createObstacle("chair", HorizontalZone.CENTER, DistanceCategory.MEDIUM),
@@ -111,40 +128,7 @@ class EvaluateSensorFusionUseCaseTest {
         val decision = useCase(frame, telemetry)
 
         assertFalse(decision.isUrgent)
-        assertEquals("Прямо стул, обойдите слева", decision.spokenText)
-        assertEquals("BYPASS_LEFT", decision.recommendedAction)
-    }
-
-    @Test
-    fun invoke_centerObstacle_withRightFree_recommendsBypassRight() {
-        val frame = VisionFrameResult(
-            obstacles = listOf(
-                createObstacle("person", HorizontalZone.CENTER, DistanceCategory.MEDIUM),
-                createObstacle("backpack", HorizontalZone.LEFT, DistanceCategory.MEDIUM)
-            )
-        )
-        val telemetry = CaneTelemetry(distanceCm = 70, direction = CaneDirection.CENTER)
-
-        val decision = useCase(frame, telemetry)
-
-        assertFalse(decision.isUrgent)
-        assertEquals("Прямо человек, обойдите справа", decision.spokenText)
-        assertEquals("BYPASS_RIGHT", decision.recommendedAction)
-    }
-
-    @Test
-    fun invoke_centerObstacleNearDistance_triggersUrgentCloseWarning() {
-        val frame = VisionFrameResult(
-            obstacles = listOf(
-                createObstacle("chair", HorizontalZone.CENTER, DistanceCategory.NEAR)
-            )
-        )
-        val telemetry = CaneTelemetry(distanceCm = 70, direction = CaneDirection.CENTER)
-
-        val decision = useCase(frame, telemetry)
-
-        assertTrue(decision.isUrgent)
-        assertEquals("Вплотную, стул!", decision.spokenText)
-        assertEquals("STOP", decision.recommendedAction)
+        assertNull(decision.spokenText)
+        assertNull(decision.recommendedAction)
     }
 }

@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
                     MainScreen(
                         uiState = uiState,
                         onPermissionResult = viewModel::onCameraPermissionResult,
+                        onBluetoothPermissionResult = viewModel::onBluetoothPermissionResult,
                         onInitialCheck = viewModel::onInitialPermissionCheck,
                         onFrameAnalyzed = viewModel::onFrameAnalyzed,
                         onTestCalibrationClicked = viewModel::onTestCalibrationClicked,

@@ -220,4 +220,86 @@ class MainViewModelTest {
         viewModel.onTestCalibrationClicked()
         assertTrue(fakeBluetoothClient.demoCalled)
     }
+
+    @Test
+    fun `onBluetoothPermissionResult updates permission status and triggers reconnect when granted`() {
+        fakeBluetoothClient.connectCalled = false
+        fakeBluetoothClient._connectionStatus.value = BluetoothConnectionStatus.PERMISSION_REQUIRED
+
+        viewModel.onBluetoothPermissionResult(granted = false)
+        assertEquals(BluetoothConnectionStatus.PERMISSION_REQUIRED, viewModel.uiState.value.bluetoothStatus)
+        assertFalse(fakeBluetoothClient.connectCalled)
+
+        viewModel.onBluetoothPermissionResult(granted = true)
+        assertTrue(fakeBluetoothClient.connectCalled)
+    }
+
+    @Test
+    fun `unified priority picks side fusion over wall proximity`() = runTest {
+        fakeBluetoothClient._telemetryFlow.value = CaneTelemetry(distanceCm = 60, direction = CaneDirection.RIGHT)
+        val frame = VisionFrameResult(
+            spatialHazards = listOf(SpatialHazard.WallProximity(0.9f)),
+            obstacles = listOf(
+                DetectedObstacle(
+                    id = 1,
+                    label = "chair",
+                    confidence = 0.9f,
+                    boundingBox = BoundingBox2D(700f, 200f, 950f, 700f),
+                    zone = HorizontalZone.RIGHT,
+                    estimatedDistanceCategory = DistanceCategory.MEDIUM
+                )
+            ),
+            frameWidth = 1000,
+            frameHeight = 1000
+        )
+
+        viewModel.onFrameAnalyzed(frame)
+
+        assertTrue(fakeSpeechOutput.spokenMessages.any {
+            it.first == "Осторожно, справа преграда!" && it.second
+        })
+    }
+
+    @Test
+    fun `unified priority picks doorway over medium center obstacle`() = runTest {
+        val frame = VisionFrameResult(
+            spatialHazards = listOf(SpatialHazard.DoorAhead(0.8f)),
+            obstacles = listOf(
+                DetectedObstacle(
+                    id = 1,
+                    label = "chair",
+                    confidence = 0.9f,
+                    boundingBox = BoundingBox2D(350f, 250f, 650f, 750f),
+                    zone = HorizontalZone.CENTER,
+                    estimatedDistanceCategory = DistanceCategory.MEDIUM
+                )
+            ),
+            frameWidth = 1000,
+            frameHeight = 1000
+        )
+
+        viewModel.onFrameAnalyzed(frame)
+
+        assertEquals(1, fakeSpeechOutput.spokenMessages.size)
+        assertEquals("Впереди дверной проем", fakeSpeechOutput.spokenMessages[0].first)
+        assertFalse(fakeSpeechOutput.spokenMessages[0].second)
+    }
+
+    @Test
+    fun `unified priority picks critical sonar over wall proximity`() = runTest {
+        fakeBluetoothClient._telemetryFlow.value = CaneTelemetry(distanceCm = 25, direction = CaneDirection.CENTER)
+        fakeSpeechOutput.spokenMessages.clear()
+
+        val frame = VisionFrameResult(
+            spatialHazards = listOf(SpatialHazard.WallProximity(0.9f)),
+            frameWidth = 1000,
+            frameHeight = 1000
+        )
+
+        viewModel.onFrameAnalyzed(frame)
+
+        assertEquals(1, fakeSpeechOutput.spokenMessages.size)
+        assertEquals("Внимание, близко препятствие: 25 см!", fakeSpeechOutput.spokenMessages[0].first)
+        assertTrue(fakeSpeechOutput.spokenMessages[0].second)
+    }
 }

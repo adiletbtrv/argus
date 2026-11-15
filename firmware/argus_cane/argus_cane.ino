@@ -58,6 +58,10 @@ const unsigned long TELEMETRY_INTERVAL_MS = 180; // периодичность �
 
 // переменные детектора зарядки и двойного виброотклика
 bool lastChargingState = false;
+unsigned long lastChargingSampleMs = 0;
+uint8_t chargingHighCount = 0;
+const unsigned long CHARGING_SAMPLE_INTERVAL_MS = 20;
+const uint8_t CHARGING_DEBOUNCE_SAMPLES = 3;
 
 enum class ChargingVibroState {
   IDLE,
@@ -78,7 +82,7 @@ long readDistanceCm() {
   delayMicroseconds(10);
   digitalWrite(PIN_TRIG, LOW);
 
-  unsigned long duration = pulseIn(PIN_ECHO, HIGH, 25000); // таймаут примерно 4.3 м
+  unsigned long duration = pulseIn(PIN_ECHO, HIGH, 12000); // таймаут примерно 2 м
   if (duration == 0) {
     return -1; // препятствие вне зоны обнаружения
   }
@@ -270,14 +274,26 @@ void loop() {
     sendTelemetry(currentDist, currentDir);
   }
 
-  // детекция переднего фронта подключения зарядки
-  bool currentChargingState = (analogRead(PIN_CHARGING) > 512);
-  if (currentChargingState && !lastChargingState) {
-    chargingVibroState = ChargingVibroState::PULSE_1;
-    chargingVibroTimer = now;
-    analogWrite(PIN_VIBRO, VIBRO_INTENSITY);
+  // детекция переднего фронта подключения зарядки с дребезгозащитой (3 замера с шагом >= 20 мс)
+  if (now - lastChargingSampleMs >= CHARGING_SAMPLE_INTERVAL_MS) {
+    lastChargingSampleMs = now;
+    bool rawChargingHigh = (analogRead(PIN_CHARGING) > 512);
+    if (rawChargingHigh) {
+      if (chargingHighCount < CHARGING_DEBOUNCE_SAMPLES) {
+        chargingHighCount++;
+      }
+    } else {
+      chargingHighCount = 0;
+    }
+
+    bool stableChargingState = (chargingHighCount >= CHARGING_DEBOUNCE_SAMPLES);
+    if (stableChargingState && !lastChargingState) {
+      chargingVibroState = ChargingVibroState::PULSE_1;
+      chargingVibroTimer = now;
+      analogWrite(PIN_VIBRO, VIBRO_INTENSITY);
+    }
+    lastChargingState = stableChargingState;
   }
-  lastChargingState = currentChargingState;
 
   // обновление конечных автоматов вибрации
   updateChargingVibro(now);

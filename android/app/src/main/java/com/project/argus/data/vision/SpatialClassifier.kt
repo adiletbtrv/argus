@@ -8,7 +8,7 @@ class SpatialClassifier {
 
     /**
      * Determines horizontal zone from the object's center-X relative to [imageWidth].
-     * Zone thresholds: LEFT < 33% | CENTER 33%–66% | RIGHT > 66%.
+     * Zone thresholds: LEFT < 33% | CENTER 33%-66% | RIGHT > 66%.
      */
     fun classifyZone(centerX: Float, imageWidth: Int): HorizontalZone = when {
         centerX < imageWidth * 0.33f -> HorizontalZone.LEFT

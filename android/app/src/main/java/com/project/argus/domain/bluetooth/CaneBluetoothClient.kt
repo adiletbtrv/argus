@@ -7,6 +7,7 @@ enum class BluetoothConnectionStatus {
     DISCONNECTED,
     CONNECTING,
     CONNECTED,
+    DEMO_MODE,
     PERMISSION_REQUIRED,
     ERROR
 }
