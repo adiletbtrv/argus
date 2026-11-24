@@ -87,6 +87,17 @@ class BluetoothCaneClient(
         }
     }
 
+    private fun hasBluetoothScanPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_SCAN
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
     @SuppressLint("MissingPermission")
     override fun connect(targetAddress: String?) {
         if (!hasBluetoothConnectPermission()) {
@@ -139,9 +150,13 @@ class BluetoothCaneClient(
         setErrorStatusOnFailure: Boolean
     ): Boolean {
         return try {
-            // Discovery must be canceled before connecting to avoid slow connections
-            if (adapter.isDiscovering) {
-                adapter.cancelDiscovery()
+            // Cancel discovery when BLUETOOTH_SCAN is granted to avoid slow connections
+            if (hasBluetoothScanPermission()) {
+                runCatching {
+                    if (adapter.isDiscovering) {
+                        adapter.cancelDiscovery()
+                    }
+                }
             }
 
             Log.d(TAG, "Connecting to ${targetDevice.name} (${targetDevice.address})...")
