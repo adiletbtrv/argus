@@ -274,7 +274,7 @@ void loop() {
     sendTelemetry(currentDist, currentDir);
   }
 
-  // детекция переднего фронта подключения зарядки с дребезгозащитой (3 замера с шагом >= 20 мс)
+  // детекция переднего фронта подключения зарядки с симметричным гистерезисом (3 замера с шагом >= 20 мс)
   if (now - lastChargingSampleMs >= CHARGING_SAMPLE_INTERVAL_MS) {
     lastChargingSampleMs = now;
     bool rawChargingHigh = (analogRead(PIN_CHARGING) > 512);
@@ -283,7 +283,9 @@ void loop() {
         chargingHighCount++;
       }
     } else {
-      chargingHighCount = 0;
+      if (chargingHighCount > 0) {
+        chargingHighCount--;
+      }
     }
 
     bool stableChargingState = (chargingHighCount >= CHARGING_DEBOUNCE_SAMPLES);
@@ -292,7 +294,11 @@ void loop() {
       chargingVibroTimer = now;
       analogWrite(PIN_VIBRO, VIBRO_INTENSITY);
     }
-    lastChargingState = stableChargingState;
+    if (stableChargingState) {
+      lastChargingState = true;
+    } else if (chargingHighCount == 0) {
+      lastChargingState = false;
+    }
   }
 
   // обновление конечных автоматов вибрации
