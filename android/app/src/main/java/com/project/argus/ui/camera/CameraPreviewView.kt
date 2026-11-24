@@ -109,7 +109,7 @@ fun CameraPreviewScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    val cameraExecutor = remember(context) { Executors.newSingleThreadExecutor() }
     val imageAnalysisRef = remember { AtomicReference<ImageAnalysis?>(null) }
     val visionAnalyzer = remember(context) {
         VisionAnalyzer(context) { result ->
@@ -117,7 +117,7 @@ fun CameraPreviewScreen(
         }
     }
 
-    DisposableEffect(visionAnalyzer) {
+    DisposableEffect(visionAnalyzer, cameraExecutor) {
         onDispose {
             visionAnalyzer.markClosing()
             imageAnalysisRef.getAndSet(null)?.clearAnalyzer()
@@ -145,7 +145,14 @@ fun CameraPreviewScreen(
 
                 val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                 cameraProviderFuture.addListener({
-                    val cameraProvider = cameraProviderFuture.get()
+                    if (cameraExecutor.isShutdown) return@addListener
+
+                    val cameraProvider = try {
+                        cameraProviderFuture.get()
+                    } catch (exc: Exception) {
+                        exc.printStackTrace()
+                        return@addListener
+                    }
 
                     val preview = Preview.Builder().build().also {
                         it.setSurfaceProvider(previewView.surfaceProvider)

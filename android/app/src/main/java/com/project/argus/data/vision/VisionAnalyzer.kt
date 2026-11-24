@@ -80,69 +80,92 @@ class VisionAnalyzer(
             return
         }
 
-        lastAnalyzedTimestamp = currentTimestamp
-        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-
-        val isRotated = rotationDegrees == 90 || rotationDegrees == 270
-        val imageWidth = if (isRotated) imageProxy.height else imageProxy.width
-        val imageHeight = if (isRotated) imageProxy.width else imageProxy.height
-
-        val rawBitmap = imageProxy.toBitmap()
-        val bitmap = if (rotationDegrees != 0) {
-            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-            val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
-            if (rotated !== rawBitmap) {
-                rawBitmap.recycle()
-            }
-            rotated
-        } else {
-            rawBitmap
-        }
-
-        val rawObjects = try {
-            if (isClosed.get() || nativeClosed.get()) {
-                emptyList()
-            } else {
-                val mpImage = BitmapImageBuilder(bitmap).build()
-                try {
-                    synchronized(detectorLock) {
-                        if (isClosed.get() || nativeClosed.get()) {
-                            emptyList()
-                        } else {
-                            objectDetector.detect(mpImage).detections().map { detection ->
-                                val box = detection.boundingBox()
-                                RawDetectedObject(
-                                    boundingBox = BoundingBox2D(
-                                        left = box.left,
-                                        top = box.top,
-                                        right = box.right,
-                                        bottom = box.bottom
-                                    ),
-                                    labels = detection.categories().map { RawLabel(it.categoryName(), it.score()) }
-                                )
-                            }
-                        }
-                    }
-                } finally {
-                    mpImage.close()
-                }
-            }
-        } catch (_: Exception) {
-            emptyList()
-        } finally {
-            if (!bitmap.isRecycled) {
-                bitmap.recycle()
-            }
-        }
-
-        if (isClosed.get()) {
-            imageProxy.close()
-            return
-        }
-
-        val inputImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
+        var delegatedToLabeler = false
+        var rawBitmap: Bitmap? = null
+        var bitmap: Bitmap? = null
 
         try {
+            lastAnalyzedTimestamp = currentTimestamp
+            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+
+            val isRotated = rotationDegrees == 90 || rotationDegrees == 270
+            val imageWidth = if (isRotated) imageProxy.height else imageProxy.width
+            val imageHeight = if (isRotated) imageProxy.width else imageProxy.height
+
+            val rawObjects = try {
+                val createdRaw = imageProxy.toBitmap()
+                rawBitmap = createdRaw
+                val preparedBitmap = if (rotationDegrees != 0) {
+                    val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                    val rotated = Bitmap.createBitmap(
+                        createdRaw,
+                        0,
+                        0,
+                        createdRaw.width,
+                        createdRaw.height,
+                        matrix,
+                        true
+                    )
+                    if (rotated !== createdRaw) {
+                        createdRaw.recycle()
+                        rawBitmap = null
+                    }
+                    rotated
+                } else {
+                    createdRaw
+                }
+                bitmap = preparedBitmap
+
+                if (isClosed.get() || nativeClosed.get()) {
+                    emptyList()
+                } else {
+                    val mpImage = BitmapImageBuilder(preparedBitmap).build()
+                    try {
+                        synchronized(detectorLock) {
+                            if (isClosed.get() || nativeClosed.get()) {
+                                emptyList()
+                            } else {
+                                objectDetector.detect(mpImage).detections().map { detection ->
+                                    val box = detection.boundingBox()
+                                    RawDetectedObject(
+                                        boundingBox = BoundingBox2D(
+                                            left = box.left,
+                                            top = box.top,
+                                            right = box.right,
+                                            bottom = box.bottom
+                                        ),
+                                        labels = detection.categories().map { RawLabel(it.categoryName(), it.score()) }
+                                    )
+                                }
+                            }
+                        }
+                    } finally {
+                        mpImage.close()
+                    }
+                }
+            } catch (_: Exception) {
+                emptyList()
+            } finally {
+                bitmap?.let { bmp ->
+                    if (!bmp.isRecycled) {
+                        bmp.recycle()
+                    }
+                }
+                rawBitmap?.let { raw ->
+                    if (!raw.isRecycled) {
+                        raw.recycle()
+                    }
+                }
+                bitmap = null
+                rawBitmap = null
+            }
+
+            if (isClosed.get()) {
+                return
+            }
+
+            val inputImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
+
             imageLabeler.process(inputImage)
                 .addOnSuccessListener { labels ->
                     if (isClosed.get()) return@addOnSuccessListener
@@ -164,8 +187,13 @@ class VisionAnalyzer(
                 .addOnCompleteListener {
                     imageProxy.close()
                 }
+            delegatedToLabeler = true
         } catch (_: Exception) {
-            imageProxy.close()
+            // Frame skipped; outer finally closes imageProxy if not delegated
+        } finally {
+            if (!delegatedToLabeler) {
+                imageProxy.close()
+            }
         }
     }
 

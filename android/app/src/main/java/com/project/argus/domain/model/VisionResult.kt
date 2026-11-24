@@ -41,10 +41,11 @@ data class DetectedObstacle(
 )
 
 
+// Frame area coverage thresholds synchronized with SpatialClassifier (< 6% is ignored).
 enum class DistanceCategory {
-    NEAR,    // High threat: covers > 35% of frame area
-    MEDIUM,  // Moderate: covers 10% - 35%
-    FAR      // Low: covers < 10%
+    NEAR,    // High threat: covers >= 28% of frame area
+    MEDIUM,  // Moderate: covers 12%-28% of frame area
+    FAR      // Low: covers 6%-12% of frame area
 }
 
 

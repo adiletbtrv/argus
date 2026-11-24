@@ -56,6 +56,7 @@ class BluetoothCaneClient(
 
     private var connectionJob: Job? = null
     private var demoJob: Job? = null
+    @Volatile
     private var activeSocket: BluetoothSocket? = null
 
     companion object {
@@ -161,8 +162,8 @@ class BluetoothCaneClient(
 
             Log.d(TAG, "Connecting to ${targetDevice.name} (${targetDevice.address})...")
             val socket = targetDevice.createRfcommSocketToServiceRecord(SPP_UUID)
-            socket.connect()
             activeSocket = socket
+            socket.connect()
             _connectionStatus.value = BluetoothConnectionStatus.CONNECTED
             Log.i(TAG, "Successfully connected to cane via SPP")
 
@@ -218,12 +219,9 @@ class BluetoothCaneClient(
     }
 
     private fun closeSocketSilently() {
-        try {
-            activeSocket?.close()
-        } catch (ignored: Exception) {
-        } finally {
-            activeSocket = null
-        }
+        val socket = activeSocket
+        activeSocket = null
+        runCatching { socket?.close() }
     }
 
     @SuppressLint("MissingPermission")
