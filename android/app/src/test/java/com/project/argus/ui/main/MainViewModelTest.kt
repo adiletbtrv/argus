@@ -388,4 +388,19 @@ class MainViewModelTest {
         assertFalse(fakeSpeechOutput.spokenMessages.last().second)
         assertEquals(0, fakeHapticFeedbackService.urgentVibrationCount)
     }
+
+    @Test
+    fun `armrest hazard speaks non urgently without triggering haptic feedback`() = runTest {
+        viewModel.onFrameAnalyzed(
+            VisionFrameResult(
+                spatialHazards = listOf(SpatialHazard.ArmrestDetected(confidence = 0.85f, zone = HorizontalZone.LEFT)),
+                frameWidth = 1000,
+                frameHeight = 1000
+            )
+        )
+
+        assertEquals(1, fakeSpeechOutput.spokenMessages.size)
+        assertFalse(fakeSpeechOutput.spokenMessages[0].second)
+        assertEquals(0, fakeHapticFeedbackService.urgentVibrationCount)
+    }
 }
