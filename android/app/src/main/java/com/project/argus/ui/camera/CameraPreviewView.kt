@@ -49,6 +49,7 @@ import com.project.argus.domain.model.VisionFrameResult
 import com.project.argus.ui.main.MainUiState
 import com.project.argus.ui.main.components.HazardBadge
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicReference
 
 internal enum class CaneDistanceStatus {
     UNKNOWN,
@@ -109,6 +110,7 @@ fun CameraPreviewScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    val imageAnalysisRef = remember { AtomicReference<ImageAnalysis?>(null) }
     val visionAnalyzer = remember(context) {
         VisionAnalyzer(context) { result ->
             onFrameAnalyzed(result)
@@ -117,7 +119,13 @@ fun CameraPreviewScreen(
 
     DisposableEffect(visionAnalyzer) {
         onDispose {
-            visionAnalyzer.close()
+            visionAnalyzer.markClosing()
+            imageAnalysisRef.getAndSet(null)?.clearAnalyzer()
+            runCatching {
+                cameraExecutor.execute { visionAnalyzer.close() }
+            }.onFailure {
+                visionAnalyzer.close()
+            }
             cameraExecutor.shutdown()
         }
     }
@@ -148,7 +156,10 @@ fun CameraPreviewScreen(
                         .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                         .build()
                         .also { analysis ->
-                            analysis.setAnalyzer(cameraExecutor, visionAnalyzer)
+                            imageAnalysisRef.set(analysis)
+                            if (!cameraExecutor.isShutdown) {
+                                analysis.setAnalyzer(cameraExecutor, visionAnalyzer)
+                            }
                         }
 
                     val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA

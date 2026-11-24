@@ -54,6 +54,12 @@ class VisionAnalyzer(
     private var lastAnalyzedTimestamp = 0L
     private val frameIntervalMs = 180L // ~5.5 FPS for optimal battery and performance
     private val isClosed = AtomicBoolean(false)
+    private val nativeClosed = AtomicBoolean(false)
+    private val detectorLock = Any()
+
+    fun markClosing() {
+        isClosed.set(true)
+    }
 
     @SuppressLint("UnsafeOptInUsageError")
     override fun analyze(imageProxy: ImageProxy) {
@@ -94,22 +100,28 @@ class VisionAnalyzer(
         }
 
         val rawObjects = try {
-            if (isClosed.get()) {
+            if (isClosed.get() || nativeClosed.get()) {
                 emptyList()
             } else {
                 val mpImage = BitmapImageBuilder(bitmap).build()
                 try {
-                    objectDetector.detect(mpImage).detections().map { detection ->
-                        val box = detection.boundingBox()
-                        RawDetectedObject(
-                            boundingBox = BoundingBox2D(
-                                left = box.left,
-                                top = box.top,
-                                right = box.right,
-                                bottom = box.bottom
-                            ),
-                            labels = detection.categories().map { RawLabel(it.categoryName(), it.score()) }
-                        )
+                    synchronized(detectorLock) {
+                        if (isClosed.get() || nativeClosed.get()) {
+                            emptyList()
+                        } else {
+                            objectDetector.detect(mpImage).detections().map { detection ->
+                                val box = detection.boundingBox()
+                                RawDetectedObject(
+                                    boundingBox = BoundingBox2D(
+                                        left = box.left,
+                                        top = box.top,
+                                        right = box.right,
+                                        bottom = box.bottom
+                                    ),
+                                    labels = detection.categories().map { RawLabel(it.categoryName(), it.score()) }
+                                )
+                            }
+                        }
                     }
                 } finally {
                     mpImage.close()
@@ -158,8 +170,11 @@ class VisionAnalyzer(
     }
 
     override fun close() {
-        if (!isClosed.compareAndSet(false, true)) return
-        runCatching { objectDetector.close() }
+        isClosed.set(true)
+        if (!nativeClosed.compareAndSet(false, true)) return
+        synchronized(detectorLock) {
+            runCatching { objectDetector.close() }
+        }
         runCatching { imageLabeler.close() }
     }
 }
