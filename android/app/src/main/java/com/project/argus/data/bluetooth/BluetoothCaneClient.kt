@@ -28,6 +28,8 @@ import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Android implementation of [CaneBluetoothClient] for HC-05 SPP Bluetooth Classic.
@@ -56,8 +58,8 @@ class BluetoothCaneClient(
 
     private var connectionJob: Job? = null
     private var demoJob: Job? = null
-    @Volatile
-    private var activeSocket: BluetoothSocket? = null
+    private val activeSocket = AtomicReference<BluetoothSocket?>(null)
+    private val connectionGeneration = AtomicLong(0L)
 
     companion object {
         private const val TAG = "BluetoothCaneClient"
@@ -115,9 +117,12 @@ class BluetoothCaneClient(
         }
 
         disconnect()
+        val generation = connectionGeneration.incrementAndGet()
 
         connectionJob = coroutineScope.launch(ioDispatcher) {
+            if (connectionGeneration.get() != generation) return@launch
             _connectionStatus.value = BluetoothConnectionStatus.CONNECTING
+
             val targetDevice: BluetoothDevice? = try {
                 if (!targetAddress.isNullOrBlank()) {
                     adapter.getRemoteDevice(targetAddress)
@@ -126,19 +131,26 @@ class BluetoothCaneClient(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error resolving Bluetooth cane device", e)
-                _connectionStatus.value = BluetoothConnectionStatus.ERROR
+                if (connectionGeneration.get() == generation) {
+                    _connectionStatus.value = BluetoothConnectionStatus.ERROR
+                }
                 return@launch
             }
 
+            if (connectionGeneration.get() != generation) return@launch
+
             if (targetDevice == null) {
                 Log.w(TAG, "No paired HC-05/HC-06/Argus cane device found")
-                _connectionStatus.value = BluetoothConnectionStatus.DISCONNECTED
+                if (connectionGeneration.get() == generation) {
+                    _connectionStatus.value = BluetoothConnectionStatus.DISCONNECTED
+                }
                 return@launch
             }
 
             connectAndReadSocket(
                 adapter = adapter,
                 targetDevice = targetDevice,
+                generation = generation,
                 setErrorStatusOnFailure = true
             )
         }
@@ -148,9 +160,15 @@ class BluetoothCaneClient(
     private fun connectAndReadSocket(
         adapter: BluetoothAdapter,
         targetDevice: BluetoothDevice,
+        generation: Long,
         setErrorStatusOnFailure: Boolean
     ): Boolean {
+        var socket: BluetoothSocket? = null
         return try {
+            if (connectionGeneration.get() != generation) {
+                return false
+            }
+
             // Cancel discovery when BLUETOOTH_SCAN is granted to avoid slow connections
             if (hasBluetoothScanPermission()) {
                 runCatching {
@@ -160,23 +178,43 @@ class BluetoothCaneClient(
                 }
             }
 
+            if (connectionGeneration.get() != generation) {
+                return false
+            }
+
             Log.d(TAG, "Connecting to ${targetDevice.name} (${targetDevice.address})...")
-            val socket = targetDevice.createRfcommSocketToServiceRecord(SPP_UUID)
-            activeSocket = socket
-            socket.connect()
+            val createdSocket = targetDevice.createRfcommSocketToServiceRecord(SPP_UUID)
+            socket = createdSocket
+            if (connectionGeneration.get() != generation) {
+                runCatching { createdSocket.close() }
+                return false
+            }
+
+            activeSocket.set(createdSocket)
+            if (connectionGeneration.get() != generation) {
+                closeOwnedSocket(createdSocket)
+                return false
+            }
+
+            createdSocket.connect()
+            if (connectionGeneration.get() != generation) {
+                closeOwnedSocket(createdSocket)
+                return false
+            }
+
             _connectionStatus.value = BluetoothConnectionStatus.CONNECTED
             Log.i(TAG, "Successfully connected to cane via SPP")
 
             // Start unidirectional read loop
-            readTelemetryLoop(socket)
+            readTelemetryLoop(createdSocket, generation)
             true
         } catch (e: CancellationException) {
-            closeSocketSilently()
+            closeOwnedSocket(socket)
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error connecting to Bluetooth cane", e)
-            closeSocketSilently()
-            if (setErrorStatusOnFailure) {
+            closeOwnedSocket(socket)
+            if (setErrorStatusOnFailure && connectionGeneration.get() == generation) {
                 _connectionStatus.value = BluetoothConnectionStatus.ERROR
             }
             false
@@ -189,14 +227,15 @@ class BluetoothCaneClient(
         return pairedDevices.firstOrNull { device -> isCaneDeviceName(device.name) }
     }
 
-    private fun readTelemetryLoop(socket: BluetoothSocket) {
+    private fun readTelemetryLoop(socket: BluetoothSocket, generation: Long) {
         val reader = BufferedReader(InputStreamReader(socket.inputStream))
         try {
-            while (coroutineScope.isActive && socket.isConnected) {
+            while (coroutineScope.isActive && socket.isConnected && connectionGeneration.get() == generation) {
                 val line = reader.readLine() ?: break
+                if (connectionGeneration.get() != generation) break
                 if (line.isNotBlank()) {
                     val telemetry = CaneTelemetry.parse(line)
-                    if (telemetry != null) {
+                    if (telemetry != null && connectionGeneration.get() == generation) {
                         _telemetryFlow.value = telemetry
                     }
                 }
@@ -204,24 +243,29 @@ class BluetoothCaneClient(
         } catch (e: Exception) {
             Log.w(TAG, "Bluetooth read stream ended or encountered an error: ${e.message}")
         } finally {
-            closeSocketSilently()
-            _connectionStatus.value = BluetoothConnectionStatus.DISCONNECTED
+            closeOwnedSocket(socket)
+            if (connectionGeneration.get() == generation) {
+                _connectionStatus.value = BluetoothConnectionStatus.DISCONNECTED
+            }
         }
     }
 
     override fun disconnect() {
+        connectionGeneration.incrementAndGet()
         connectionJob?.cancel()
         connectionJob = null
         demoJob?.cancel()
         demoJob = null
-        closeSocketSilently()
+        activeSocket.getAndSet(null)?.let { socket ->
+            runCatching { socket.close() }
+        }
         _connectionStatus.value = BluetoothConnectionStatus.DISCONNECTED
     }
 
-    private fun closeSocketSilently() {
-        val socket = activeSocket
-        activeSocket = null
-        runCatching { socket?.close() }
+    private fun closeOwnedSocket(socket: BluetoothSocket?) {
+        if (socket == null) return
+        activeSocket.compareAndSet(socket, null)
+        runCatching { socket.close() }
     }
 
     @SuppressLint("MissingPermission")
@@ -246,16 +290,19 @@ class BluetoothCaneClient(
         }
 
         disconnect()
+        val generation = connectionGeneration.incrementAndGet()
         connectionJob = coroutineScope.launch(ioDispatcher) {
+            if (connectionGeneration.get() != generation) return@launch
             _connectionStatus.value = BluetoothConnectionStatus.CONNECTING
             val connected = connectAndReadSocket(
                 adapter = adapter,
                 targetDevice = pairedCane,
+                generation = generation,
                 setErrorStatusOnFailure = false
             )
-            if (!connected && isActive) {
+            if (!connected && isActive && connectionGeneration.get() == generation) {
                 Log.d(TAG, "Socket connection failed -> falling back to local demo mode")
-                emitDemoSequence()
+                emitDemoSequence(generation)
             }
         }
     }
@@ -266,18 +313,26 @@ class BluetoothCaneClient(
      */
     private fun runLocalDemoSequence() {
         disconnect()
+        val generation = connectionGeneration.incrementAndGet()
         demoJob = coroutineScope.launch(ioDispatcher) {
-            emitDemoSequence()
+            emitDemoSequence(generation)
         }
     }
 
-    private suspend fun emitDemoSequence() {
+    private suspend fun emitDemoSequence(generation: Long) {
+        if (connectionGeneration.get() != generation) return
         _connectionStatus.value = BluetoothConnectionStatus.DEMO_MODE
         // Demo sequence: CENTER 60cm -> LEFT 28cm (critical) -> RIGHT 45cm
-        _telemetryFlow.value = CaneTelemetry(distanceCm = 60, direction = CaneDirection.CENTER)
+        emitDemoStep(generation, CaneTelemetry(distanceCm = 60, direction = CaneDirection.CENTER))
         kotlinx.coroutines.delay(1200)
-        _telemetryFlow.value = CaneTelemetry(distanceCm = 28, direction = CaneDirection.LEFT)
+        emitDemoStep(generation, CaneTelemetry(distanceCm = 28, direction = CaneDirection.LEFT))
         kotlinx.coroutines.delay(1500)
-        _telemetryFlow.value = CaneTelemetry(distanceCm = 45, direction = CaneDirection.RIGHT)
+        emitDemoStep(generation, CaneTelemetry(distanceCm = 45, direction = CaneDirection.RIGHT))
+    }
+
+    private fun emitDemoStep(generation: Long, telemetry: CaneTelemetry) {
+        if (connectionGeneration.get() == generation) {
+            _telemetryFlow.value = telemetry
+        }
     }
 }
