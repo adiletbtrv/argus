@@ -12,28 +12,20 @@
 ## Схема подключения
 
 ![Схема P0001](P0001.png)
+
+```text
 Arduino Uno
-
-│
-
-├─── 5V ─────────────────── [ HC-SR04: VCC ]
-
-│
-
-├─── GND ────────────────── [ HC-SR04: GND ] / [ LED: Катод ]
-
-│
-
-├─── D9 (TRIG_PIN, OUTPUT) ─► [ HC-SR04: TRIG ]
-
-│
-
-├─── D8 (ECHO_PIN, INPUT) ◄── [ HC-SR04: ECHO ]
-
-│
-
-└─── D13 (LED_PIN, OUTPUT) ─► [ Резистор / LED: Анод ]
-
+   │
+   ├─── 5V ─────────────────── [ HC-SR04: VCC ]
+   │
+   ├─── GND ────────────────── [ HC-SR04: GND ] / [ LED: Катод ]
+   │
+   ├─── D9 (TRIG_PIN, OUTPUT) ─► [ HC-SR04: TRIG ]
+   │
+   ├─── D8 (ECHO_PIN, INPUT) ◄── [ HC-SR04: ECHO ]
+   │
+   └─── D13 (LED_PIN, OUTPUT) ─► [ Резистор / LED: Анод ]
+```
 ---
 
 ### Таблица соединений:
