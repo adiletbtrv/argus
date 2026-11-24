@@ -9,6 +9,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.project.argus.ArgusApplication
 import com.project.argus.domain.bluetooth.BluetoothConnectionStatus
 import com.project.argus.domain.bluetooth.CaneBluetoothClient
+import com.project.argus.domain.haptic.HapticFeedbackService
+import com.project.argus.domain.haptic.NoOpHapticFeedbackService
 import com.project.argus.domain.model.CaneDirection
 import com.project.argus.domain.model.VisionFrameResult
 import com.project.argus.domain.tts.SpeechOutput
@@ -31,6 +33,7 @@ class MainViewModel(
     private val evaluateSensorFusionUseCase: EvaluateSensorFusionUseCase,
     private val bluetoothClient: CaneBluetoothClient,
     private val speechOutput: SpeechOutput,
+    private val hapticFeedbackService: HapticFeedbackService = NoOpHapticFeedbackService,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
@@ -55,6 +58,9 @@ class MainViewModel(
                     val decision = evaluateSensorFusionUseCase(currentFrame, telemetry)
                     if (decision.spokenText != null) {
                         speechOutput.speak(decision.spokenText, decision.isUrgent)
+                        if (decision.isUrgent) {
+                            hapticFeedbackService.vibrateUrgent()
+                        }
                     }
                 }
             }
@@ -124,6 +130,9 @@ class MainViewModel(
 
             if (textToSpeak != null) {
                 speechOutput.speak(textToSpeak, isUrgent)
+                if (isUrgent) {
+                    hapticFeedbackService.vibrateUrgent()
+                }
             }
 
             _uiState.update { current ->
@@ -154,7 +163,8 @@ class MainViewModel(
                     evaluateHazardsUseCase = app.evaluateHazardsUseCase,
                     evaluateSensorFusionUseCase = app.evaluateSensorFusionUseCase,
                     bluetoothClient = app.caneBluetoothClient,
-                    speechOutput = app.voiceAlertService
+                    speechOutput = app.voiceAlertService,
+                    hapticFeedbackService = app.hapticFeedbackService
                 )
             }
         }
