@@ -2,6 +2,7 @@ package com.project.argus.data.haptic
 
 import android.content.Context
 import android.os.Build
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -10,7 +11,10 @@ import com.project.argus.domain.haptic.HapticFeedbackService
 
 class AndroidHapticFeedbackService(
     context: Context,
-    private val cooldownGate: HapticCooldownGate = HapticCooldownGate(cooldownMs = 1500L)
+    private val cooldownGate: HapticCooldownGate = HapticCooldownGate(
+        cooldownMs = 1500L,
+        clock = SystemClock::elapsedRealtime
+    )
 ) : HapticFeedbackService {
 
     private val appContext: Context = context.applicationContext

@@ -1,5 +1,6 @@
 package com.project.argus.ui.main.components
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,12 @@ fun CameraPermissionView(
     onRequestPermission: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val permissionButtonDescription = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        "Предоставить доступ к камере и Bluetooth"
+    } else {
+        "Предоставить доступ к камере"
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -66,7 +73,7 @@ fun CameraPermissionView(
                 modifier = Modifier
                     .heightIn(min = 48.dp)
                     .semantics {
-                        contentDescription = "Предоставить разрешение на использование камеры и Bluetooth"
+                        contentDescription = permissionButtonDescription
                     },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF2E7D32)

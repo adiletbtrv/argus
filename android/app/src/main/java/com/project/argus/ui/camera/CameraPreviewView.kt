@@ -25,6 +25,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,7 +69,8 @@ internal enum class CaneDistanceStatus {
 internal data class CaneDistanceDisplay(
     val label: String,
     val status: CaneDistanceStatus,
-    val containerColor: Color
+    val containerColor: Color,
+    val contentDescription: String
 )
 
 internal fun resolveCaneDistanceDisplay(distanceCm: Int?): CaneDistanceDisplay {
@@ -76,27 +78,32 @@ internal fun resolveCaneDistanceDisplay(distanceCm: Int?): CaneDistanceDisplay {
         distanceCm == null -> CaneDistanceDisplay(
             label = "--",
             status = CaneDistanceStatus.UNKNOWN,
-            containerColor = Color(0xFF263238).copy(alpha = 0.9f)
+            containerColor = Color(0xFF263238).copy(alpha = 0.9f),
+            contentDescription = "Дистанция трости: нет данных"
         )
         distanceCm <= 0 -> CaneDistanceDisplay(
             label = "> 200 СМ",
             status = CaneDistanceStatus.CLEAR,
-            containerColor = Color(0xFF2E7D32)
+            containerColor = Color(0xFF2E7D32),
+            contentDescription = "Дистанция трости: более 200 сантиметров, путь свободен"
         )
         distanceCm in 1 until 35 -> CaneDistanceDisplay(
             label = "$distanceCm СМ",
             status = CaneDistanceStatus.CRITICAL,
-            containerColor = Color(0xFFD32F2F)
+            containerColor = Color(0xFFD32F2F),
+            contentDescription = "Дистанция трости: $distanceCm сантиметров"
         )
         distanceCm in 35..50 -> CaneDistanceDisplay(
             label = "$distanceCm СМ",
             status = CaneDistanceStatus.WARNING,
-            containerColor = Color(0xFFE65100)
+            containerColor = Color(0xFFE65100),
+            contentDescription = "Дистанция трости: $distanceCm сантиметров"
         )
         else -> CaneDistanceDisplay(
             label = "$distanceCm СМ",
             status = CaneDistanceStatus.SAFE,
-            containerColor = Color(0xFF2E7D32)
+            containerColor = Color(0xFF2E7D32),
+            contentDescription = "Дистанция трости: $distanceCm сантиметров"
         )
     }
 }
@@ -260,47 +267,49 @@ fun CameraPreviewScreen(
                 .align(Alignment.TopCenter)
         ) {
             uiState.validatedHazards.forEach { hazard ->
-                when (hazard) {
-                    is SpatialHazard.StairsAhead -> {
-                        HazardBadge(
-                            title = stringResource(R.string.hazard_stairs_title),
-                            subtitle = stringResource(
-                                R.string.hazard_stairs_sub,
-                                (hazard.confidence * 100).toInt()
-                            ),
-                            backgroundColor = Color(0xFFD32F2F)
-                        )
+                key(hazard::class) {
+                    when (hazard) {
+                        is SpatialHazard.StairsAhead -> {
+                            HazardBadge(
+                                title = stringResource(R.string.hazard_stairs_title),
+                                subtitle = stringResource(
+                                    R.string.hazard_stairs_sub,
+                                    (hazard.confidence * 100).toInt()
+                                ),
+                                backgroundColor = Color(0xFFD32F2F)
+                            )
+                        }
+                        is SpatialHazard.ArmrestDetected -> {
+                            HazardBadge(
+                                title = stringResource(R.string.hazard_armrest_title),
+                                subtitle = stringResource(
+                                    R.string.hazard_armrest_sub,
+                                    (hazard.confidence * 100).toInt()
+                                ),
+                                backgroundColor = Color(0xFF0288D1)
+                            )
+                        }
+                        is SpatialHazard.WallProximity -> {
+                            HazardBadge(
+                                title = stringResource(R.string.hazard_wall_title),
+                                subtitle = stringResource(R.string.hazard_wall_sub),
+                                backgroundColor = Color(0xFFE64A19)
+                            )
+                        }
+                        is SpatialHazard.DoorAhead -> {
+                            HazardBadge(
+                                title = stringResource(R.string.hazard_door_title),
+                                subtitle = stringResource(
+                                    R.string.hazard_door_sub,
+                                    (hazard.confidence * 100).toInt()
+                                ),
+                                backgroundColor = Color(0xFF388E3C)
+                            )
+                        }
+                        SpatialHazard.None -> Unit
                     }
-                    is SpatialHazard.ArmrestDetected -> {
-                        HazardBadge(
-                            title = stringResource(R.string.hazard_armrest_title),
-                            subtitle = stringResource(
-                                R.string.hazard_armrest_sub,
-                                (hazard.confidence * 100).toInt()
-                            ),
-                            backgroundColor = Color(0xFF0288D1)
-                        )
-                    }
-                    is SpatialHazard.WallProximity -> {
-                        HazardBadge(
-                            title = stringResource(R.string.hazard_wall_title),
-                            subtitle = stringResource(R.string.hazard_wall_sub),
-                            backgroundColor = Color(0xFFE64A19)
-                        )
-                    }
-                    is SpatialHazard.DoorAhead -> {
-                        HazardBadge(
-                            title = stringResource(R.string.hazard_door_title),
-                            subtitle = stringResource(
-                                R.string.hazard_door_sub,
-                                (hazard.confidence * 100).toInt()
-                            ),
-                            backgroundColor = Color(0xFF388E3C)
-                        )
-                    }
-                    SpatialHazard.None -> Unit
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
-                Spacer(modifier = Modifier.height(6.dp))
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -312,16 +321,11 @@ fun CameraPreviewScreen(
             ) {
                 // Panel: Cane Distance
                 val distanceDisplay = resolveCaneDistanceDisplay(uiState.caneDistanceCm)
-                val distanceSpeechDescription = when (distanceDisplay.status) {
-                    CaneDistanceStatus.UNKNOWN -> "Дистанция трости: нет данных"
-                    CaneDistanceStatus.CLEAR -> "Дистанция трости: более 200 сантиметров, путь свободен"
-                    else -> "Дистанция трости: ${distanceDisplay.label}"
-                }
                 Card(
                     modifier = Modifier
                         .weight(1f)
                         .semantics(mergeDescendants = true) {
-                            contentDescription = distanceSpeechDescription
+                            contentDescription = distanceDisplay.contentDescription
                         },
                     colors = CardDefaults.cardColors(
                         containerColor = distanceDisplay.containerColor

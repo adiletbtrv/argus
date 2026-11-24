@@ -12,9 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,7 +32,6 @@ fun HazardBadge(
         modifier = modifier
             .fillMaxWidth()
             .semantics(mergeDescendants = true) {
-                liveRegion = LiveRegionMode.Assertive
                 contentDescription = "$title. $subtitle"
             },
         colors = CardDefaults.cardColors(containerColor = backgroundColor),
