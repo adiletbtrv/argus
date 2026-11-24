@@ -41,6 +41,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.project.argus.R
 import com.project.argus.data.vision.VisionAnalyzer
+import com.project.argus.domain.bluetooth.BluetoothConnectionStatus
 import com.project.argus.domain.model.CaneDirection
 import com.project.argus.domain.model.HorizontalZone
 import com.project.argus.domain.model.SpatialHazard
@@ -48,6 +49,51 @@ import com.project.argus.domain.model.VisionFrameResult
 import com.project.argus.ui.main.MainUiState
 import com.project.argus.ui.main.components.HazardBadge
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicReference
+
+internal enum class CaneDistanceStatus {
+    UNKNOWN,
+    CLEAR,
+    CRITICAL,
+    WARNING,
+    SAFE
+}
+
+internal data class CaneDistanceDisplay(
+    val label: String,
+    val status: CaneDistanceStatus,
+    val containerColor: Color
+)
+
+internal fun resolveCaneDistanceDisplay(distanceCm: Int?): CaneDistanceDisplay {
+    return when {
+        distanceCm == null -> CaneDistanceDisplay(
+            label = "--",
+            status = CaneDistanceStatus.UNKNOWN,
+            containerColor = Color(0xFF263238).copy(alpha = 0.9f)
+        )
+        distanceCm <= 0 -> CaneDistanceDisplay(
+            label = "> 200 СМ",
+            status = CaneDistanceStatus.CLEAR,
+            containerColor = Color(0xFF2E7D32)
+        )
+        distanceCm in 1 until 35 -> CaneDistanceDisplay(
+            label = "$distanceCm СМ",
+            status = CaneDistanceStatus.CRITICAL,
+            containerColor = Color(0xFFD32F2F)
+        )
+        distanceCm in 35..50 -> CaneDistanceDisplay(
+            label = "$distanceCm СМ",
+            status = CaneDistanceStatus.WARNING,
+            containerColor = Color(0xFFE65100)
+        )
+        else -> CaneDistanceDisplay(
+            label = "$distanceCm СМ",
+            status = CaneDistanceStatus.SAFE,
+            containerColor = Color(0xFF2E7D32)
+        )
+    }
+}
 
 /**
  * Camera preview composable integrating CameraX, real-time object tracking overlay,
@@ -64,6 +110,7 @@ fun CameraPreviewScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    val imageAnalysisRef = remember { AtomicReference<ImageAnalysis?>(null) }
     val visionAnalyzer = remember(context) {
         VisionAnalyzer(context) { result ->
             onFrameAnalyzed(result)
@@ -72,7 +119,13 @@ fun CameraPreviewScreen(
 
     DisposableEffect(visionAnalyzer) {
         onDispose {
-            visionAnalyzer.close()
+            visionAnalyzer.markClosing()
+            imageAnalysisRef.getAndSet(null)?.clearAnalyzer()
+            runCatching {
+                cameraExecutor.execute { visionAnalyzer.close() }
+            }.onFailure {
+                visionAnalyzer.close()
+            }
             cameraExecutor.shutdown()
         }
     }
@@ -103,7 +156,10 @@ fun CameraPreviewScreen(
                         .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                         .build()
                         .also { analysis ->
-                            analysis.setAnalyzer(cameraExecutor, visionAnalyzer)
+                            imageAnalysisRef.set(analysis)
+                            if (!cameraExecutor.isShutdown) {
+                                analysis.setAnalyzer(cameraExecutor, visionAnalyzer)
+                            }
                         }
 
                     val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
@@ -238,15 +294,11 @@ fun CameraPreviewScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Panel: Cane Distance
+                val distanceDisplay = resolveCaneDistanceDisplay(uiState.caneDistanceCm)
                 Card(
                     modifier = Modifier.weight(1f),
                     colors = CardDefaults.cardColors(
-                        containerColor = when {
-                            uiState.caneDistanceCm == null -> Color(0xFF263238).copy(alpha = 0.9f)
-                            uiState.caneDistanceCm < 35 -> Color(0xFFD32F2F)
-                            uiState.caneDistanceCm > 50 -> Color(0xFF2E7D32)
-                            else -> Color(0xFFE65100)
-                        }
+                        containerColor = distanceDisplay.containerColor
                     ),
                     shape = RoundedCornerShape(10.dp)
                 ) {
@@ -262,7 +314,7 @@ fun CameraPreviewScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = uiState.caneDistanceCm?.let { "$it СМ" } ?: "--",
+                            text = distanceDisplay.label,
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Black
@@ -305,6 +357,31 @@ fun CameraPreviewScreen(
                         )
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            val (btStatusLabel, btStatusColor) = when (uiState.bluetoothStatus) {
+                BluetoothConnectionStatus.CONNECTED -> "БЛЮТУЗ: ПОДКЛЮЧЕНО" to Color(0xFF2E7D32)
+                BluetoothConnectionStatus.CONNECTING -> "БЛЮТУЗ: ПОИСК HC-05..." to Color(0xFFE65100)
+                BluetoothConnectionStatus.DEMO_MODE -> "БЛЮТУЗ: ДЕМО" to Color(0xFF1565C0)
+                BluetoothConnectionStatus.DISCONNECTED,
+                BluetoothConnectionStatus.PERMISSION_REQUIRED,
+                BluetoothConnectionStatus.ERROR -> "БЛЮТУЗ: НЕТ СВЯЗИ" to Color(0xFF455A64)
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = btStatusColor),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = btStatusLabel,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))

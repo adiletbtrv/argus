@@ -15,6 +15,7 @@ import com.project.argus.domain.bluetooth.BluetoothConnectionStatus
 import com.project.argus.domain.bluetooth.CaneBluetoothClient
 import com.project.argus.domain.model.CaneDirection
 import com.project.argus.domain.model.CaneTelemetry
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,13 +55,22 @@ class BluetoothCaneClient(
     override val connectionStatus: StateFlow<BluetoothConnectionStatus> = _connectionStatus.asStateFlow()
 
     private var connectionJob: Job? = null
+    private var demoJob: Job? = null
     private var activeSocket: BluetoothSocket? = null
 
     companion object {
         private const val TAG = "BluetoothCaneClient"
         val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private const val HC05_DEFAULT_NAME_PREFIX = "HC-05"
+        private const val HC06_DEFAULT_NAME_PREFIX = "HC-06"
         private const val ARGUS_NAME_PREFIX = "ARGUS"
+
+        internal fun isCaneDeviceName(name: String?): Boolean {
+            if (name.isNullOrBlank()) return false
+            return name.contains(HC05_DEFAULT_NAME_PREFIX, ignoreCase = true) ||
+                name.contains(HC06_DEFAULT_NAME_PREFIX, ignoreCase = true) ||
+                name.contains(ARGUS_NAME_PREFIX, ignoreCase = true)
+        }
     }
 
     private fun hasBluetoothConnectPermission(): Boolean {
@@ -74,6 +84,17 @@ class BluetoothCaneClient(
                 context,
                 Manifest.permission.BLUETOOTH
             ) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun hasBluetoothScanPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_SCAN
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
         }
     }
 
@@ -96,49 +117,75 @@ class BluetoothCaneClient(
 
         connectionJob = coroutineScope.launch(ioDispatcher) {
             _connectionStatus.value = BluetoothConnectionStatus.CONNECTING
-            try {
-                val targetDevice: BluetoothDevice? = if (!targetAddress.isNullOrBlank()) {
+            val targetDevice: BluetoothDevice? = try {
+                if (!targetAddress.isNullOrBlank()) {
                     adapter.getRemoteDevice(targetAddress)
                 } else {
                     findPairedCaneDevice(adapter)
                 }
-
-                if (targetDevice == null) {
-                    Log.w(TAG, "No paired HC-05/Argus cane device found")
-                    _connectionStatus.value = BluetoothConnectionStatus.DISCONNECTED
-                    return@launch
-                }
-
-                // Discovery must be canceled before connecting to avoid slow connections
-                if (adapter.isDiscovering) {
-                    adapter.cancelDiscovery()
-                }
-
-                Log.d(TAG, "Connecting to ${targetDevice.name} (${targetDevice.address})...")
-                val socket = targetDevice.createRfcommSocketToServiceRecord(SPP_UUID)
-                socket.connect()
-                activeSocket = socket
-                _connectionStatus.value = BluetoothConnectionStatus.CONNECTED
-                Log.i(TAG, "Successfully connected to cane via SPP")
-
-                // Start unidirectional read loop
-                readTelemetryLoop(socket)
             } catch (e: Exception) {
-                Log.e(TAG, "Error connecting to Bluetooth cane", e)
+                Log.e(TAG, "Error resolving Bluetooth cane device", e)
                 _connectionStatus.value = BluetoothConnectionStatus.ERROR
-                closeSocketSilently()
+                return@launch
             }
+
+            if (targetDevice == null) {
+                Log.w(TAG, "No paired HC-05/HC-06/Argus cane device found")
+                _connectionStatus.value = BluetoothConnectionStatus.DISCONNECTED
+                return@launch
+            }
+
+            connectAndReadSocket(
+                adapter = adapter,
+                targetDevice = targetDevice,
+                setErrorStatusOnFailure = true
+            )
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun connectAndReadSocket(
+        adapter: BluetoothAdapter,
+        targetDevice: BluetoothDevice,
+        setErrorStatusOnFailure: Boolean
+    ): Boolean {
+        return try {
+            // Cancel discovery when BLUETOOTH_SCAN is granted to avoid slow connections
+            if (hasBluetoothScanPermission()) {
+                runCatching {
+                    if (adapter.isDiscovering) {
+                        adapter.cancelDiscovery()
+                    }
+                }
+            }
+
+            Log.d(TAG, "Connecting to ${targetDevice.name} (${targetDevice.address})...")
+            val socket = targetDevice.createRfcommSocketToServiceRecord(SPP_UUID)
+            socket.connect()
+            activeSocket = socket
+            _connectionStatus.value = BluetoothConnectionStatus.CONNECTED
+            Log.i(TAG, "Successfully connected to cane via SPP")
+
+            // Start unidirectional read loop
+            readTelemetryLoop(socket)
+            true
+        } catch (e: CancellationException) {
+            closeSocketSilently()
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Error connecting to Bluetooth cane", e)
+            closeSocketSilently()
+            if (setErrorStatusOnFailure) {
+                _connectionStatus.value = BluetoothConnectionStatus.ERROR
+            }
+            false
         }
     }
 
     @SuppressLint("MissingPermission")
     private fun findPairedCaneDevice(adapter: BluetoothAdapter): BluetoothDevice? {
         val pairedDevices = adapter.bondedDevices ?: return null
-        return pairedDevices.firstOrNull { device ->
-            val name = device.name ?: ""
-            name.contains(HC05_DEFAULT_NAME_PREFIX, ignoreCase = true) ||
-                name.contains(ARGUS_NAME_PREFIX, ignoreCase = true)
-        } ?: pairedDevices.firstOrNull()
+        return pairedDevices.firstOrNull { device -> isCaneDeviceName(device.name) }
     }
 
     private fun readTelemetryLoop(socket: BluetoothSocket) {
@@ -164,6 +211,8 @@ class BluetoothCaneClient(
     override fun disconnect() {
         connectionJob?.cancel()
         connectionJob = null
+        demoJob?.cancel()
+        demoJob = null
         closeSocketSilently()
         _connectionStatus.value = BluetoothConnectionStatus.DISCONNECTED
     }
@@ -177,13 +226,39 @@ class BluetoothCaneClient(
         }
     }
 
+    @SuppressLint("MissingPermission")
     override fun triggerDemoOrReconnect() {
         if (_connectionStatus.value == BluetoothConnectionStatus.CONNECTED) {
             Log.d(TAG, "Reconnect requested while connected -> reconnecting socket")
             connect()
+            return
+        }
+
+        val adapter = bluetoothAdapter
+        val pairedCane = if (hasBluetoothConnectPermission() && adapter != null && adapter.isEnabled) {
+            findPairedCaneDevice(adapter)
         } else {
-            Log.d(TAG, "Triggering test demo sequence locally on phone (Jury presentation mode)")
+            null
+        }
+
+        if (pairedCane == null || adapter == null) {
+            Log.d(TAG, "No connected or paired HC-05/HC-06/ARGUS found -> triggering local demo mode")
             runLocalDemoSequence()
+            return
+        }
+
+        disconnect()
+        connectionJob = coroutineScope.launch(ioDispatcher) {
+            _connectionStatus.value = BluetoothConnectionStatus.CONNECTING
+            val connected = connectAndReadSocket(
+                adapter = adapter,
+                targetDevice = pairedCane,
+                setErrorStatusOnFailure = false
+            )
+            if (!connected && isActive) {
+                Log.d(TAG, "Socket connection failed -> falling back to local demo mode")
+                emitDemoSequence()
+            }
         }
     }
 
@@ -192,13 +267,19 @@ class BluetoothCaneClient(
      * Emits realistic telemetry events locally without sending anything to hardware.
      */
     private fun runLocalDemoSequence() {
-        coroutineScope.launch(ioDispatcher) {
-            // Demo sequence: CENTER 60cm -> LEFT 28cm (critical) -> RIGHT 45cm
-            _telemetryFlow.value = CaneTelemetry(distanceCm = 60, direction = CaneDirection.CENTER)
-            kotlinx.coroutines.delay(1200)
-            _telemetryFlow.value = CaneTelemetry(distanceCm = 28, direction = CaneDirection.LEFT)
-            kotlinx.coroutines.delay(1500)
-            _telemetryFlow.value = CaneTelemetry(distanceCm = 45, direction = CaneDirection.RIGHT)
+        disconnect()
+        demoJob = coroutineScope.launch(ioDispatcher) {
+            emitDemoSequence()
         }
+    }
+
+    private suspend fun emitDemoSequence() {
+        _connectionStatus.value = BluetoothConnectionStatus.DEMO_MODE
+        // Demo sequence: CENTER 60cm -> LEFT 28cm (critical) -> RIGHT 45cm
+        _telemetryFlow.value = CaneTelemetry(distanceCm = 60, direction = CaneDirection.CENTER)
+        kotlinx.coroutines.delay(1200)
+        _telemetryFlow.value = CaneTelemetry(distanceCm = 28, direction = CaneDirection.LEFT)
+        kotlinx.coroutines.delay(1500)
+        _telemetryFlow.value = CaneTelemetry(distanceCm = 45, direction = CaneDirection.RIGHT)
     }
 }

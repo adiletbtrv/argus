@@ -16,6 +16,7 @@ import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.project.argus.domain.model.BoundingBox2D
 import com.project.argus.domain.model.VisionFrameResult
 import java.io.Closeable
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * CameraX ImageAnalysis analyzer utilizing MediaPipe Tasks Object Detection (EfficientDet-Lite0 COCO)
@@ -52,9 +53,21 @@ class VisionAnalyzer(
 
     private var lastAnalyzedTimestamp = 0L
     private val frameIntervalMs = 180L // ~5.5 FPS for optimal battery and performance
+    private val isClosed = AtomicBoolean(false)
+    private val nativeClosed = AtomicBoolean(false)
+    private val detectorLock = Any()
+
+    fun markClosing() {
+        isClosed.set(true)
+    }
 
     @SuppressLint("UnsafeOptInUsageError")
     override fun analyze(imageProxy: ImageProxy) {
+        if (isClosed.get()) {
+            imageProxy.close()
+            return
+        }
+
         val currentTimestamp = System.currentTimeMillis()
         if (currentTimestamp - lastAnalyzedTimestamp < frameIntervalMs) {
             imageProxy.close()
@@ -77,55 +90,91 @@ class VisionAnalyzer(
         val rawBitmap = imageProxy.toBitmap()
         val bitmap = if (rotationDegrees != 0) {
             val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-            Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+            val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+            if (rotated !== rawBitmap) {
+                rawBitmap.recycle()
+            }
+            rotated
         } else {
             rawBitmap
         }
 
-        val detections = runCatching {
-            val mpImage = BitmapImageBuilder(bitmap).build()
-            objectDetector.detect(mpImage).detections()
-        }.getOrDefault(emptyList())
+        val rawObjects = try {
+            if (isClosed.get() || nativeClosed.get()) {
+                emptyList()
+            } else {
+                val mpImage = BitmapImageBuilder(bitmap).build()
+                try {
+                    synchronized(detectorLock) {
+                        if (isClosed.get() || nativeClosed.get()) {
+                            emptyList()
+                        } else {
+                            objectDetector.detect(mpImage).detections().map { detection ->
+                                val box = detection.boundingBox()
+                                RawDetectedObject(
+                                    boundingBox = BoundingBox2D(
+                                        left = box.left,
+                                        top = box.top,
+                                        right = box.right,
+                                        bottom = box.bottom
+                                    ),
+                                    labels = detection.categories().map { RawLabel(it.categoryName(), it.score()) }
+                                )
+                            }
+                        }
+                    }
+                } finally {
+                    mpImage.close()
+                }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        } finally {
+            if (!bitmap.isRecycled) {
+                bitmap.recycle()
+            }
+        }
 
-        val rawObjects = detections.map { detection ->
-            val box = detection.boundingBox()
-            RawDetectedObject(
-                boundingBox = BoundingBox2D(
-                    left = box.left,
-                    top = box.top,
-                    right = box.right,
-                    bottom = box.bottom
-                ),
-                labels = detection.categories().map { RawLabel(it.categoryName(), it.score()) }
-            )
+        if (isClosed.get()) {
+            imageProxy.close()
+            return
         }
 
         val inputImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
 
-        imageLabeler.process(inputImage)
-            .addOnSuccessListener { labels ->
-                val rawLabels = labels.map { RawLabel(it.text, it.confidence) }
+        try {
+            imageLabeler.process(inputImage)
+                .addOnSuccessListener { labels ->
+                    if (isClosed.get()) return@addOnSuccessListener
+                    val rawLabels = labels.map { RawLabel(it.text, it.confidence) }
 
-                val frameResult = processor.process(
-                    detectedObjects = rawObjects,
-                    imageLabels = rawLabels,
-                    imageWidth = imageWidth,
-                    imageHeight = imageHeight,
-                    timestamp = currentTimestamp
-                )
+                    val frameResult = processor.process(
+                        detectedObjects = rawObjects,
+                        imageLabels = rawLabels,
+                        imageWidth = imageWidth,
+                        imageHeight = imageHeight,
+                        timestamp = currentTimestamp
+                    )
 
-                onResult(frameResult)
-            }
-            .addOnFailureListener {
-                // Dropped or failed frame handled gracefully
-            }
-            .addOnCompleteListener {
-                imageProxy.close()
-            }
+                    onResult(frameResult)
+                }
+                .addOnFailureListener {
+                    // Dropped or failed frame handled gracefully
+                }
+                .addOnCompleteListener {
+                    imageProxy.close()
+                }
+        } catch (_: Exception) {
+            imageProxy.close()
+        }
     }
 
     override fun close() {
-        runCatching { objectDetector.close() }
+        isClosed.set(true)
+        if (!nativeClosed.compareAndSet(false, true)) return
+        synchronized(detectorLock) {
+            runCatching { objectDetector.close() }
+        }
         runCatching { imageLabeler.close() }
     }
 }

@@ -22,12 +22,24 @@ import com.project.argus.ui.main.components.CameraPermissionView
 fun MainScreen(
     uiState: MainUiState,
     onPermissionResult: (Boolean) -> Unit,
+    onBluetoothPermissionResult: (Boolean) -> Unit,
     onInitialCheck: (Boolean) -> Unit,
     onFrameAnalyzed: (VisionFrameResult) -> Unit,
     onTestCalibrationClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+
+    fun hasBluetoothPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
 
     val permissionsToRequest = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -40,8 +52,18 @@ fun MainScreen(
     val multiplePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val cameraGranted = permissions[Manifest.permission.CAMERA] ?: false
+        val cameraGranted = permissions[Manifest.permission.CAMERA]
+            ?: (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED)
+        val bluetoothGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissions[Manifest.permission.BLUETOOTH_CONNECT] ?: hasBluetoothPermission()
+        } else {
+            true
+        }
         onPermissionResult(cameraGranted)
+        onBluetoothPermissionResult(bluetoothGranted)
     }
 
     LaunchedEffect(Unit) {
@@ -49,9 +71,11 @@ fun MainScreen(
             context,
             Manifest.permission.CAMERA
         ) == PackageManager.PERMISSION_GRANTED
+        val bluetoothGranted = hasBluetoothPermission()
 
         onInitialCheck(cameraGranted)
-        if (!cameraGranted) {
+        onBluetoothPermissionResult(bluetoothGranted)
+        if (!cameraGranted || !bluetoothGranted) {
             multiplePermissionLauncher.launch(permissionsToRequest)
         }
     }

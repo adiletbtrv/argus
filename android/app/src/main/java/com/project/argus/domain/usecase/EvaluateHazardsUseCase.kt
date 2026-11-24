@@ -81,9 +81,10 @@ class EvaluateHazardsUseCase(
         fun defaultStrategies(): List<AlertStrategy> = listOf(
             StairsAlertStrategy(),
             WallProximityAlertStrategy(),
+            NearCenterObstacleAlertStrategy(),
             ArmrestAlertStrategy(),
             DoorAheadAlertStrategy(),
-            CenterObstacleAlertStrategy()
+            CenterCorridorAlertStrategy()
         )
     }
 }
