@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -33,6 +34,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -189,7 +195,11 @@ fun CameraPreviewScreen(
         )
 
         // 2. Detection Overlay Canvas
-        Canvas(modifier = Modifier.fillMaxSize()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .clearAndSetSemantics { }
+        ) {
             val canvasWidth = size.width
             val canvasHeight = size.height
 
@@ -302,8 +312,17 @@ fun CameraPreviewScreen(
             ) {
                 // Panel: Cane Distance
                 val distanceDisplay = resolveCaneDistanceDisplay(uiState.caneDistanceCm)
+                val distanceSpeechDescription = when (distanceDisplay.status) {
+                    CaneDistanceStatus.UNKNOWN -> "Дистанция трости: нет данных"
+                    CaneDistanceStatus.CLEAR -> "Дистанция трости: более 200 сантиметров, путь свободен"
+                    else -> "Дистанция трости: ${distanceDisplay.label}"
+                }
                 Card(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = distanceSpeechDescription
+                        },
                     colors = CardDefaults.cardColors(
                         containerColor = distanceDisplay.containerColor
                     ),
@@ -330,8 +349,17 @@ fun CameraPreviewScreen(
                 }
 
                 // Panel: Cane Direction / Course
+                val directionLabel = when (uiState.caneDirection) {
+                    CaneDirection.LEFT -> "ВЛЕВО"
+                    CaneDirection.RIGHT -> "ВПРАВО"
+                    CaneDirection.CENTER -> "ПРЯМО"
+                }
                 Card(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = "Курс трости: $directionLabel"
+                        },
                     colors = CardDefaults.cardColors(
                         containerColor = when (uiState.caneDirection) {
                             CaneDirection.LEFT -> Color(0xFF1565C0)
@@ -353,11 +381,7 @@ fun CameraPreviewScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = when (uiState.caneDirection) {
-                                CaneDirection.LEFT -> "ВЛЕВО"
-                                CaneDirection.RIGHT -> "ВПРАВО"
-                                CaneDirection.CENTER -> "ПРЯМО"
-                            },
+                            text = directionLabel,
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Black
@@ -378,7 +402,12 @@ fun CameraPreviewScreen(
             }
 
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics(mergeDescendants = true) {
+                        liveRegion = LiveRegionMode.Polite
+                        contentDescription = btStatusLabel
+                    },
                 colors = CardDefaults.cardColors(containerColor = btStatusColor),
                 shape = RoundedCornerShape(8.dp)
             ) {
@@ -398,7 +427,10 @@ fun CameraPreviewScreen(
                 onClick = onTestCalibrationClicked,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp),
+                    .heightIn(min = 48.dp)
+                    .semantics {
+                        contentDescription = "Тест и калибровка: переподключить трость или запустить демонстрацию"
+                    },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF00897B)
                 ),
