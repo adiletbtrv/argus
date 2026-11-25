@@ -2,6 +2,7 @@ package com.project.argus.ui.main
 
 import com.project.argus.domain.bluetooth.BluetoothConnectionStatus
 import com.project.argus.domain.bluetooth.CaneBluetoothClient
+import com.project.argus.domain.haptic.HapticFeedbackService
 import com.project.argus.domain.model.BoundingBox2D
 import com.project.argus.domain.model.CaneDirection
 import com.project.argus.domain.model.CaneTelemetry
@@ -43,6 +44,14 @@ class FakeSpeechOutput : SpeechOutput {
     }
 }
 
+class FakeHapticFeedbackService : HapticFeedbackService {
+    var urgentVibrationCount = 0
+
+    override fun vibrateUrgent() {
+        urgentVibrationCount++
+    }
+}
+
 class FakeCaneBluetoothClient : CaneBluetoothClient {
     val _telemetryFlow = MutableStateFlow<CaneTelemetry?>(null)
     override val telemetryFlow: StateFlow<CaneTelemetry?> = _telemetryFlow.asStateFlow()
@@ -79,6 +88,7 @@ class MainViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var fakeSpeechOutput: FakeSpeechOutput
+    private lateinit var fakeHapticFeedbackService: FakeHapticFeedbackService
     private lateinit var fakeBluetoothClient: FakeCaneBluetoothClient
     private lateinit var evaluateHazardsUseCase: EvaluateHazardsUseCase
     private lateinit var evaluateSensorFusionUseCase: EvaluateSensorFusionUseCase
@@ -88,6 +98,7 @@ class MainViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         fakeSpeechOutput = FakeSpeechOutput()
+        fakeHapticFeedbackService = FakeHapticFeedbackService()
         fakeBluetoothClient = FakeCaneBluetoothClient()
         evaluateHazardsUseCase = EvaluateHazardsUseCase()
         evaluateSensorFusionUseCase = EvaluateSensorFusionUseCase()
@@ -96,6 +107,7 @@ class MainViewModelTest {
             evaluateSensorFusionUseCase = evaluateSensorFusionUseCase,
             bluetoothClient = fakeBluetoothClient,
             speechOutput = fakeSpeechOutput,
+            hapticFeedbackService = fakeHapticFeedbackService,
             defaultDispatcher = testDispatcher
         )
     }
@@ -301,5 +313,94 @@ class MainViewModelTest {
         assertEquals(1, fakeSpeechOutput.spokenMessages.size)
         assertEquals("Внимание, близко препятствие: 25 см!", fakeSpeechOutput.spokenMessages[0].first)
         assertTrue(fakeSpeechOutput.spokenMessages[0].second)
+    }
+
+    @Test
+    fun `urgent alerts trigger haptic feedback across sonar wall and side fusion`() = runTest {
+        // 1. Critical sonar via telemetry stream
+        fakeBluetoothClient._telemetryFlow.value = CaneTelemetry(distanceCm = 22, direction = CaneDirection.CENTER)
+        assertEquals(1, fakeHapticFeedbackService.urgentVibrationCount)
+
+        // 2. Wall proximity via camera frame (when sonar is safe)
+        fakeBluetoothClient._telemetryFlow.value = CaneTelemetry(distanceCm = 90, direction = CaneDirection.CENTER)
+        viewModel.onFrameAnalyzed(
+            VisionFrameResult(
+                spatialHazards = listOf(SpatialHazard.WallProximity(0.88f)),
+                frameWidth = 1000,
+                frameHeight = 1000
+            )
+        )
+        assertEquals(2, fakeHapticFeedbackService.urgentVibrationCount)
+
+        // 3. Side Sensor Fusion conflict via camera frame + cane tilt
+        fakeBluetoothClient._telemetryFlow.value = CaneTelemetry(distanceCm = 80, direction = CaneDirection.LEFT)
+        viewModel.onFrameAnalyzed(
+            VisionFrameResult(
+                obstacles = listOf(
+                    DetectedObstacle(
+                        id = 2,
+                        label = "chair",
+                        confidence = 0.9f,
+                        boundingBox = BoundingBox2D(40f, 200f, 260f, 700f),
+                        zone = HorizontalZone.LEFT,
+                        estimatedDistanceCategory = DistanceCategory.MEDIUM
+                    )
+                ),
+                frameWidth = 1000,
+                frameHeight = 1000
+            )
+        )
+        assertEquals(3, fakeHapticFeedbackService.urgentVibrationCount)
+    }
+
+    @Test
+    fun `non urgent alerts speak without triggering haptic feedback`() = runTest {
+        // 1. Doorway ahead (non-urgent)
+        viewModel.onFrameAnalyzed(
+            VisionFrameResult(
+                spatialHazards = listOf(SpatialHazard.DoorAhead(0.82f)),
+                frameWidth = 1000,
+                frameHeight = 1000
+            )
+        )
+        assertEquals(1, fakeSpeechOutput.spokenMessages.size)
+        assertFalse(fakeSpeechOutput.spokenMessages.last().second)
+        assertEquals(0, fakeHapticFeedbackService.urgentVibrationCount)
+
+        // 2. Medium center obstacle (non-urgent corridor guidance)
+        viewModel.onFrameAnalyzed(
+            VisionFrameResult(
+                obstacles = listOf(
+                    DetectedObstacle(
+                        id = 3,
+                        label = "chair",
+                        confidence = 0.9f,
+                        boundingBox = BoundingBox2D(360f, 250f, 640f, 750f),
+                        zone = HorizontalZone.CENTER,
+                        estimatedDistanceCategory = DistanceCategory.MEDIUM
+                    )
+                ),
+                frameWidth = 1000,
+                frameHeight = 1000
+            )
+        )
+        assertEquals(2, fakeSpeechOutput.spokenMessages.size)
+        assertFalse(fakeSpeechOutput.spokenMessages.last().second)
+        assertEquals(0, fakeHapticFeedbackService.urgentVibrationCount)
+    }
+
+    @Test
+    fun `armrest hazard speaks non urgently without triggering haptic feedback`() = runTest {
+        viewModel.onFrameAnalyzed(
+            VisionFrameResult(
+                spatialHazards = listOf(SpatialHazard.ArmrestDetected(confidence = 0.85f, zone = HorizontalZone.LEFT)),
+                frameWidth = 1000,
+                frameHeight = 1000
+            )
+        )
+
+        assertEquals(1, fakeSpeechOutput.spokenMessages.size)
+        assertFalse(fakeSpeechOutput.spokenMessages[0].second)
+        assertEquals(0, fakeHapticFeedbackService.urgentVibrationCount)
     }
 }

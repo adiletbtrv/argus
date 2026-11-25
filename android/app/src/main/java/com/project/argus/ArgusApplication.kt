@@ -2,8 +2,10 @@ package com.project.argus
 
 import android.app.Application
 import com.project.argus.data.bluetooth.BluetoothCaneClient
+import com.project.argus.data.haptic.AndroidHapticFeedbackService
 import com.project.argus.data.tts.AndroidVoiceAlertService
 import com.project.argus.domain.bluetooth.CaneBluetoothClient
+import com.project.argus.domain.haptic.HapticFeedbackService
 import com.project.argus.domain.tts.VoiceAlertService
 import com.project.argus.domain.usecase.EvaluateHazardsUseCase
 import com.project.argus.domain.usecase.EvaluateSensorFusionUseCase
@@ -28,9 +30,13 @@ class ArgusApplication : Application() {
     lateinit var caneBluetoothClient: CaneBluetoothClient
         private set
 
+    lateinit var hapticFeedbackService: HapticFeedbackService
+        private set
+
     override fun onCreate() {
         super.onCreate()
         voiceAlertService = AndroidVoiceAlertService(this)
+        hapticFeedbackService = AndroidHapticFeedbackService(this)
         evaluateHazardsUseCase = EvaluateHazardsUseCase()
         evaluateSensorFusionUseCase = EvaluateSensorFusionUseCase()
         caneBluetoothClient = BluetoothCaneClient(this, applicationScope)

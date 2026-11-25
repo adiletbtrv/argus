@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -24,6 +25,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +35,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,7 +69,8 @@ internal enum class CaneDistanceStatus {
 internal data class CaneDistanceDisplay(
     val label: String,
     val status: CaneDistanceStatus,
-    val containerColor: Color
+    val containerColor: Color,
+    val contentDescription: String
 )
 
 internal fun resolveCaneDistanceDisplay(distanceCm: Int?): CaneDistanceDisplay {
@@ -70,27 +78,32 @@ internal fun resolveCaneDistanceDisplay(distanceCm: Int?): CaneDistanceDisplay {
         distanceCm == null -> CaneDistanceDisplay(
             label = "--",
             status = CaneDistanceStatus.UNKNOWN,
-            containerColor = Color(0xFF263238).copy(alpha = 0.9f)
+            containerColor = Color(0xFF263238).copy(alpha = 0.9f),
+            contentDescription = "Дистанция трости: нет данных"
         )
         distanceCm <= 0 -> CaneDistanceDisplay(
             label = "> 200 СМ",
             status = CaneDistanceStatus.CLEAR,
-            containerColor = Color(0xFF2E7D32)
+            containerColor = Color(0xFF2E7D32),
+            contentDescription = "Дистанция трости: более 200 сантиметров, путь свободен"
         )
         distanceCm in 1 until 35 -> CaneDistanceDisplay(
             label = "$distanceCm СМ",
             status = CaneDistanceStatus.CRITICAL,
-            containerColor = Color(0xFFD32F2F)
+            containerColor = Color(0xFFD32F2F),
+            contentDescription = "Дистанция трости: $distanceCm сантиметров"
         )
         distanceCm in 35..50 -> CaneDistanceDisplay(
             label = "$distanceCm СМ",
             status = CaneDistanceStatus.WARNING,
-            containerColor = Color(0xFFE65100)
+            containerColor = Color(0xFFE65100),
+            contentDescription = "Дистанция трости: $distanceCm сантиметров"
         )
         else -> CaneDistanceDisplay(
             label = "$distanceCm СМ",
             status = CaneDistanceStatus.SAFE,
-            containerColor = Color(0xFF2E7D32)
+            containerColor = Color(0xFF2E7D32),
+            contentDescription = "Дистанция трости: $distanceCm сантиметров"
         )
     }
 }
@@ -109,7 +122,7 @@ fun CameraPreviewScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    val cameraExecutor = remember(context) { Executors.newSingleThreadExecutor() }
     val imageAnalysisRef = remember { AtomicReference<ImageAnalysis?>(null) }
     val visionAnalyzer = remember(context) {
         VisionAnalyzer(context) { result ->
@@ -117,7 +130,7 @@ fun CameraPreviewScreen(
         }
     }
 
-    DisposableEffect(visionAnalyzer) {
+    DisposableEffect(visionAnalyzer, cameraExecutor) {
         onDispose {
             visionAnalyzer.markClosing()
             imageAnalysisRef.getAndSet(null)?.clearAnalyzer()
@@ -145,7 +158,14 @@ fun CameraPreviewScreen(
 
                 val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                 cameraProviderFuture.addListener({
-                    val cameraProvider = cameraProviderFuture.get()
+                    if (cameraExecutor.isShutdown) return@addListener
+
+                    val cameraProvider = try {
+                        cameraProviderFuture.get()
+                    } catch (exc: Exception) {
+                        exc.printStackTrace()
+                        return@addListener
+                    }
 
                     val preview = Preview.Builder().build().also {
                         it.setSurfaceProvider(previewView.surfaceProvider)
@@ -182,7 +202,11 @@ fun CameraPreviewScreen(
         )
 
         // 2. Detection Overlay Canvas
-        Canvas(modifier = Modifier.fillMaxSize()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .clearAndSetSemantics { }
+        ) {
             val canvasWidth = size.width
             val canvasHeight = size.height
 
@@ -243,47 +267,49 @@ fun CameraPreviewScreen(
                 .align(Alignment.TopCenter)
         ) {
             uiState.validatedHazards.forEach { hazard ->
-                when (hazard) {
-                    is SpatialHazard.StairsAhead -> {
-                        HazardBadge(
-                            title = stringResource(R.string.hazard_stairs_title),
-                            subtitle = stringResource(
-                                R.string.hazard_stairs_sub,
-                                (hazard.confidence * 100).toInt()
-                            ),
-                            backgroundColor = Color(0xFFD32F2F)
-                        )
+                key(hazard::class) {
+                    when (hazard) {
+                        is SpatialHazard.StairsAhead -> {
+                            HazardBadge(
+                                title = stringResource(R.string.hazard_stairs_title),
+                                subtitle = stringResource(
+                                    R.string.hazard_stairs_sub,
+                                    (hazard.confidence * 100).toInt()
+                                ),
+                                backgroundColor = Color(0xFFD32F2F)
+                            )
+                        }
+                        is SpatialHazard.ArmrestDetected -> {
+                            HazardBadge(
+                                title = stringResource(R.string.hazard_armrest_title),
+                                subtitle = stringResource(
+                                    R.string.hazard_armrest_sub,
+                                    (hazard.confidence * 100).toInt()
+                                ),
+                                backgroundColor = Color(0xFF0288D1)
+                            )
+                        }
+                        is SpatialHazard.WallProximity -> {
+                            HazardBadge(
+                                title = stringResource(R.string.hazard_wall_title),
+                                subtitle = stringResource(R.string.hazard_wall_sub),
+                                backgroundColor = Color(0xFFE64A19)
+                            )
+                        }
+                        is SpatialHazard.DoorAhead -> {
+                            HazardBadge(
+                                title = stringResource(R.string.hazard_door_title),
+                                subtitle = stringResource(
+                                    R.string.hazard_door_sub,
+                                    (hazard.confidence * 100).toInt()
+                                ),
+                                backgroundColor = Color(0xFF388E3C)
+                            )
+                        }
+                        SpatialHazard.None -> Unit
                     }
-                    is SpatialHazard.ArmrestDetected -> {
-                        HazardBadge(
-                            title = stringResource(R.string.hazard_armrest_title),
-                            subtitle = stringResource(
-                                R.string.hazard_armrest_sub,
-                                (hazard.confidence * 100).toInt()
-                            ),
-                            backgroundColor = Color(0xFF0288D1)
-                        )
-                    }
-                    is SpatialHazard.WallProximity -> {
-                        HazardBadge(
-                            title = stringResource(R.string.hazard_wall_title),
-                            subtitle = stringResource(R.string.hazard_wall_sub),
-                            backgroundColor = Color(0xFFE64A19)
-                        )
-                    }
-                    is SpatialHazard.DoorAhead -> {
-                        HazardBadge(
-                            title = stringResource(R.string.hazard_door_title),
-                            subtitle = stringResource(
-                                R.string.hazard_door_sub,
-                                (hazard.confidence * 100).toInt()
-                            ),
-                            backgroundColor = Color(0xFF388E3C)
-                        )
-                    }
-                    SpatialHazard.None -> Unit
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
-                Spacer(modifier = Modifier.height(6.dp))
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -296,7 +322,11 @@ fun CameraPreviewScreen(
                 // Panel: Cane Distance
                 val distanceDisplay = resolveCaneDistanceDisplay(uiState.caneDistanceCm)
                 Card(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = distanceDisplay.contentDescription
+                        },
                     colors = CardDefaults.cardColors(
                         containerColor = distanceDisplay.containerColor
                     ),
@@ -323,8 +353,17 @@ fun CameraPreviewScreen(
                 }
 
                 // Panel: Cane Direction / Course
+                val directionLabel = when (uiState.caneDirection) {
+                    CaneDirection.LEFT -> "ВЛЕВО"
+                    CaneDirection.RIGHT -> "ВПРАВО"
+                    CaneDirection.CENTER -> "ПРЯМО"
+                }
                 Card(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = "Курс трости: $directionLabel"
+                        },
                     colors = CardDefaults.cardColors(
                         containerColor = when (uiState.caneDirection) {
                             CaneDirection.LEFT -> Color(0xFF1565C0)
@@ -346,11 +385,7 @@ fun CameraPreviewScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = when (uiState.caneDirection) {
-                                CaneDirection.LEFT -> "ВЛЕВО"
-                                CaneDirection.RIGHT -> "ВПРАВО"
-                                CaneDirection.CENTER -> "ПРЯМО"
-                            },
+                            text = directionLabel,
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Black
@@ -371,7 +406,12 @@ fun CameraPreviewScreen(
             }
 
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics(mergeDescendants = true) {
+                        liveRegion = LiveRegionMode.Polite
+                        contentDescription = btStatusLabel
+                    },
                 colors = CardDefaults.cardColors(containerColor = btStatusColor),
                 shape = RoundedCornerShape(8.dp)
             ) {
@@ -391,7 +431,10 @@ fun CameraPreviewScreen(
                 onClick = onTestCalibrationClicked,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp),
+                    .heightIn(min = 48.dp)
+                    .semantics {
+                        contentDescription = "Тест и калибровка: переподключить трость или запустить демонстрацию"
+                    },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF00897B)
                 ),
