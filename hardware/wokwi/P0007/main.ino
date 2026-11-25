@@ -7,7 +7,7 @@
 #include "direction_logic.h"
 
 // пины стенда (совпадают с diagram.json)
-const int BUTTON_PIN = 2;   // кнопка (D2), будущая калибровка по issue #11
+const int BUTTON_PIN = 2;   // кнопка (D2) для теста встроенного светодиода D13 на стенде Wokwi
 const int BUILTIN_LED = 13; // встроенный светодиод Nano
 
 const int TRIG_PIN = 5; // HC-SR04 TRIG
