@@ -1,0 +1,20 @@
+app:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'android/**'
+
+firmware:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'firmware/**'
+
+hardware:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'hardware/**'
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - '**/*.md'
