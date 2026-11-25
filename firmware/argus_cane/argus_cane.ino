@@ -29,7 +29,7 @@ const int PIN_VIBRO = 9;
 const int BT_RX_PIN = 10; // не используется для приема (односторонняя телеметрия)
 const int BT_TX_PIN = 11; // TX Arduino к RX HC-05 через делитель напряжения (1к / 2к)
 
-// пин и порог детектора зарядки (Battery Shield TP4056)
+// пин детектора зарядки (18650 Battery Shield V3, порог АЦП > 512)
 const int PIN_CHARGING = A1;
 
 // параметры обнаружения препятствий и виброотклика

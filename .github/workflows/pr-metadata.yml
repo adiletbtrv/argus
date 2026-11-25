@@ -15,6 +15,7 @@ permissions:
 jobs:
   metadata:
     name: Auto-assign Labels, Author & Milestone
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -37,7 +38,7 @@ jobs:
             const { owner, repo } = context.repo;
 
             // 1. Auto-assign PR author when assignees list is empty
-            if ((!pr.assignees || pr.assignees.length === 0) && pr.user && pr.user.login) {
+            if ((!pr.assignees || pr.assignees.length === 0) && pr.user && pr.user.login && pr.user.type !== 'Bot') {
               try {
                 await github.rest.issues.addAssignees({
                   owner,
