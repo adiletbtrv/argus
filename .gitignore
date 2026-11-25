@@ -26,3 +26,7 @@ hardware/wokwi/*/build/*
 hardware/wokwi/*/build/*.with_bootloader.hex
 !hardware/wokwi/*/build/*.elf
 !hardware/wokwi/*/*.wasm
+
+# Python bytecode cache
+__pycache__/
+*.py[cod]
