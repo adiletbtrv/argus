@@ -34,7 +34,9 @@ const int PIN_CHARGING = A1;
 
 // параметры обнаружения препятствий и виброотклика
 const long OBSTACLE_THRESHOLD_CM = 50; // порог дистанции для тактильного сигнала (см)
-const int VIBRO_INTENSITY = 255;       // интенсивность вибрации
+// 255 рассчитано на готовый 5V модуль вибромотора для Arduino (либо 5V вибромотор через SS8050);
+// для голого 3V дискового мотора от шины 5V значение снижают примерно до 150
+const int VIBRO_INTENSITY = 255;
 const unsigned long VIBRO_PULSE_DURATION_MS = 40; // длительность тактильного импульса
 
 SoftwareSerial btSerial(BT_RX_PIN, BT_TX_PIN);
@@ -82,11 +84,13 @@ long readDistanceCm() {
   delayMicroseconds(10);
   digitalWrite(PIN_TRIG, LOW);
 
-  unsigned long duration = pulseIn(PIN_ECHO, HIGH, 12000); // таймаут примерно 2 м
+  // таймаут 12000 мкс (~2 м): не задерживает цикл опроса IMU и автоматов вибрации дольше 12 мс
+  unsigned long duration = pulseIn(PIN_ECHO, HIGH, 12000);
   if (duration == 0) {
-    return -1; // препятствие вне зоны обнаружения
+    return -1; // препятствие вне зоны обнаружения (> 2 м)
   }
-  return duration / 58; // дистанция в см
+  long distCm = duration / 58;
+  return (distCm < 1) ? 1 : distCm; // защита от ложного 0 при касании датчика (< 1 см)
 }
 
 const char* getDirectionString(Direction dir) {
@@ -188,7 +192,7 @@ void setup() {
   btSerial.begin(9600);
   btSerial.stopListening(); // отключаем прерывания RX: трость только передает, входящие байты игнорируются
   Wire.begin();
-  Wire.setWireTimeout(3000, true); // сброс I2C при зависании SDA/SCL > 3 мс
+  Wire.setWireTimeout(3000, true); // аппаратный сброс шины I2C при удержании SDA/SCL дольше 3000 мкс (3 мс)
 
   // настройка выходов 74HC138
   pinMode(PIN_A, OUTPUT);
