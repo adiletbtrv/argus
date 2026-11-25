@@ -13,6 +13,7 @@ from typing import Sequence
 ALLOWED_EXTENSIONS = {
     ".md",
     ".kt",
+    ".kts",
     ".ino",
     ".cpp",
     ".h",
@@ -55,23 +56,169 @@ DOMAIN_ANDROID_IMPORT_PATTERN = re.compile(
 )
 
 
-def strip_comments_and_strings(
-    text: str,
-    allow_nested_block: bool,
-    allow_raw_strings: bool,
-    erase_strings: bool,
-) -> str:
-    """Strip comments (and optionally string/char literals) while preserving newlines."""
+def _is_kotlin_ident_start(ch: str) -> bool:
+    return ch == "_" or ch.isalpha()
+
+
+def _is_kotlin_ident_part(ch: str) -> bool:
+    return ch == "_" or ch.isalnum()
+
+
+def strip_kotlin_comments_and_strings(text: str) -> str:
+    """Erase Kotlin comments and string/char bodies while preserving newlines and $-interpolations."""
+    out: list[str] = []
+    n = len(text)
+    i = 0
+    stack: list[list[object]] = [["CODE", 0]]
+
+    while i < n:
+        mode = stack[-1][0]
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+        nxt2 = text[i + 2] if i + 2 < n else ""
+
+        if mode in ("CODE", "INTERP_CODE"):
+            if ch == "/" and nxt == "/":
+                out.append("  ")
+                i += 2
+                stack.append(["LINE_COMMENT", 0])
+            elif ch == "/" and nxt == "*":
+                out.append("  ")
+                i += 2
+                stack.append(["BLOCK_COMMENT", 1])
+            elif ch == '"' and nxt == '"' and nxt2 == '"':
+                out.append("   ")
+                i += 3
+                stack.append(["RAW_STRING", 0])
+            elif ch == '"':
+                out.append(" ")
+                i += 1
+                stack.append(["STRING", 0])
+            elif ch == "'":
+                out.append(" ")
+                i += 1
+                stack.append(["CHAR", 0])
+            elif mode == "INTERP_CODE" and ch == "{":
+                stack[-1][1] = int(stack[-1][1]) + 1
+                out.append("{")
+                i += 1
+            elif mode == "INTERP_CODE" and ch == "}":
+                depth = int(stack[-1][1]) - 1
+                stack[-1][1] = depth
+                if depth <= 0:
+                    stack.pop()
+                    out.append(" ")
+                else:
+                    out.append("}")
+                i += 1
+            else:
+                out.append(ch)
+                i += 1
+
+        elif mode == "LINE_COMMENT":
+            if ch == "\n":
+                out.append("\n")
+                stack.pop()
+            else:
+                out.append(" ")
+            i += 1
+
+        elif mode == "BLOCK_COMMENT":
+            if ch == "/" and nxt == "*":
+                out.append("  ")
+                stack[-1][1] = int(stack[-1][1]) + 1
+                i += 2
+            elif ch == "*" and nxt == "/":
+                out.append("  ")
+                depth = int(stack[-1][1]) - 1
+                stack[-1][1] = depth
+                i += 2
+                if depth <= 0:
+                    stack.pop()
+            else:
+                out.append("\n" if ch == "\n" else " ")
+                i += 1
+
+        elif mode == "STRING":
+            if ch == "\\" and i + 1 < n:
+                out.append(" ")
+                out.append("\n" if nxt == "\n" else " ")
+                i += 2
+            elif ch == '"':
+                out.append(" ")
+                i += 1
+                stack.pop()
+            elif ch == "\n":
+                out.append("\n")
+                i += 1
+                stack.pop()
+            elif ch == "$" and nxt == "{":
+                out.append("  ")
+                i += 2
+                stack.append(["INTERP_CODE", 1])
+            elif ch == "$" and _is_kotlin_ident_start(nxt):
+                out.append(" ")
+                i += 1
+                while i < n and _is_kotlin_ident_part(text[i]):
+                    out.append(text[i])
+                    i += 1
+            else:
+                out.append(" ")
+                i += 1
+
+        elif mode == "RAW_STRING":
+            if ch == '"' and nxt == '"' and nxt2 == '"':
+                if i + 3 < n and text[i + 3] == '"':
+                    out.append(" ")
+                    i += 1
+                else:
+                    out.append("   ")
+                    i += 3
+                    stack.pop()
+            elif ch == "$" and nxt == "{":
+                out.append("  ")
+                i += 2
+                stack.append(["INTERP_CODE", 1])
+            elif ch == "$" and _is_kotlin_ident_start(nxt):
+                out.append(" ")
+                i += 1
+                while i < n and _is_kotlin_ident_part(text[i]):
+                    out.append(text[i])
+                    i += 1
+            else:
+                out.append("\n" if ch == "\n" else " ")
+                i += 1
+
+        elif mode == "CHAR":
+            if ch == "\\" and i + 1 < n:
+                out.append(" ")
+                out.append("\n" if nxt == "\n" else " ")
+                i += 2
+            elif ch == "'":
+                out.append(" ")
+                i += 1
+                stack.pop()
+            elif ch == "\n":
+                out.append("\n")
+                i += 1
+                stack.pop()
+            else:
+                out.append(" ")
+                i += 1
+
+    return "".join(out)
+
+
+def strip_cpp_comments_and_strings(text: str) -> str:
+    """Erase C/C++ comments and string/char literals while preserving newlines."""
     out: list[str] = []
     n = len(text)
     i = 0
     state = "CODE"
-    block_depth = 0
 
     while i < n:
         ch = text[i]
         nxt = text[i + 1] if i + 1 < n else ""
-        nxt2 = text[i + 2] if i + 2 < n else ""
 
         if state == "CODE":
             if ch == "/" and nxt == "/":
@@ -82,17 +229,12 @@ def strip_comments_and_strings(
                 out.append("  ")
                 i += 2
                 state = "BLOCK_COMMENT"
-                block_depth = 1
-            elif allow_raw_strings and ch == '"' and nxt == '"' and nxt2 == '"':
-                out.append("   " if erase_strings else '"""')
-                i += 3
-                state = "RAW_STRING"
             elif ch == '"':
-                out.append(" " if erase_strings else '"')
+                out.append(" ")
                 i += 1
                 state = "STRING"
             elif ch == "'":
-                out.append(" " if erase_strings else "'")
+                out.append(" ")
                 i += 1
                 state = "CHAR"
             else:
@@ -106,41 +248,20 @@ def strip_comments_and_strings(
                 out.append(" ")
             i += 1
         elif state == "BLOCK_COMMENT":
-            if allow_nested_block and ch == "/" and nxt == "*":
+            if ch == "*" and nxt == "/":
                 out.append("  ")
-                block_depth += 1
                 i += 2
-            elif ch == "*" and nxt == "/":
-                out.append("  ")
-                block_depth -= 1
-                i += 2
-                if block_depth <= 0:
-                    state = "CODE"
+                state = "CODE"
             else:
                 out.append("\n" if ch == "\n" else " ")
                 i += 1
-        elif state == "RAW_STRING":
-            if ch == '"' and nxt == '"' and nxt2 == '"':
-                out.append("   " if erase_strings else '"""')
-                i += 3
-                state = "CODE"
-            else:
-                if erase_strings:
-                    out.append("\n" if ch == "\n" else " ")
-                else:
-                    out.append(ch)
-                i += 1
         elif state == "STRING":
             if ch == "\\" and i + 1 < n:
-                if erase_strings:
-                    out.append(" ")
-                    out.append("\n" if nxt == "\n" else " ")
-                else:
-                    out.append(ch)
-                    out.append(nxt)
+                out.append(" ")
+                out.append("\n" if nxt == "\n" else " ")
                 i += 2
             elif ch == '"':
-                out.append(" " if erase_strings else '"')
+                out.append(" ")
                 i += 1
                 state = "CODE"
             elif ch == "\n":
@@ -148,19 +269,15 @@ def strip_comments_and_strings(
                 i += 1
                 state = "CODE"
             else:
-                out.append(" " if erase_strings else ch)
+                out.append(" ")
                 i += 1
         elif state == "CHAR":
             if ch == "\\" and i + 1 < n:
-                if erase_strings:
-                    out.append(" ")
-                    out.append("\n" if nxt == "\n" else " ")
-                else:
-                    out.append(ch)
-                    out.append(nxt)
+                out.append(" ")
+                out.append("\n" if nxt == "\n" else " ")
                 i += 2
             elif ch == "'":
-                out.append(" " if erase_strings else "'")
+                out.append(" ")
                 i += 1
                 state = "CODE"
             elif ch == "\n":
@@ -168,7 +285,7 @@ def strip_comments_and_strings(
                 i += 1
                 state = "CODE"
             else:
-                out.append(" " if erase_strings else ch)
+                out.append(" ")
                 i += 1
 
     return "".join(out)
@@ -224,28 +341,22 @@ def run_checks(root: Path) -> tuple[list[str], dict[str, int]]:
 
         # Kotlin-specific architectural checks
         if fpath.suffix.lower() == ".kt":
-            stripped_kt = strip_comments_and_strings(
-                text,
-                allow_nested_block=True,
-                allow_raw_strings=True,
-                erase_strings=False,
-            )
-            stripped_lines = stripped_kt.splitlines()
+            stripped_kt = strip_kotlin_comments_and_strings(text)
 
-            # Check 3a: Unidirectional Bluetooth on Android side
+            # Check 3a: Unidirectional Bluetooth on Android side (supports multiline calls)
             if rel.startswith("android/app/src/"):
                 kotlin_bt_files += 1
-                for line_no, code_line in enumerate(stripped_lines, start=1):
-                    match = BT_WRITE_PATTERN.search(code_line)
-                    if match:
-                        errors.append(
-                            f"{rel}:{line_no}: forbidden Bluetooth write/output reference '{match.group(0).strip()}'"
-                        )
+                for match in BT_WRITE_PATTERN.finditer(stripped_kt):
+                    line_no = stripped_kt.count("\n", 0, match.start()) + 1
+                    snippet = " ".join(match.group(0).split())
+                    errors.append(
+                        f"{rel}:{line_no}: forbidden Bluetooth write/output reference '{snippet}'"
+                    )
 
             # Check 4: Clean Architecture domain purity
             if rel.startswith("android/app/src/main/java/com/project/argus/domain/"):
                 domain_files += 1
-                for line_no, code_line in enumerate(stripped_lines, start=1):
+                for line_no, code_line in enumerate(stripped_kt.splitlines(), start=1):
                     if DOMAIN_ANDROID_IMPORT_PATTERN.match(code_line):
                         errors.append(
                             f"{rel}:{line_no}: forbidden Android framework import in domain layer ({code_line.strip()})"
@@ -259,12 +370,7 @@ def run_checks(root: Path) -> tuple[list[str], dict[str, int]]:
             f"{firmware_rel}:1: missing required firmware file for unidirectional Bluetooth check"
         )
     elif firmware_rel in decoded_files:
-        stripped_ino = strip_comments_and_strings(
-            decoded_files[firmware_rel],
-            allow_nested_block=False,
-            allow_raw_strings=False,
-            erase_strings=True,
-        )
+        stripped_ino = strip_cpp_comments_and_strings(decoded_files[firmware_rel])
         if not BT_STOP_LISTENING_PATTERN.search(stripped_ino):
             errors.append(
                 f"{firmware_rel}:1: missing active 'btSerial.stopListening();' call outside comments"
