@@ -5,39 +5,50 @@ import java.util.Locale
 
 class HazardClassifier {
 
-    /**
-     * Analyzes raw image labels and returns the list of spatial hazards detected in this frame.
-     *
-     * @param imageLabels Raw classification labels from ML Kit Image Labeler.
-     * @param hasPhysicalObjects True if the Object Detector found at least one bounding-box object,
-     *        used to suppress [SpatialHazard.WallProximity] when a real object is in the foreground.
-     */
+    // Analyzes ML Kit scene labels to identify spatial hazards and non-COCO scene obstacles.
+    // Furniture context suppresses false stair triggers without emitting armrest hazards.
     fun classify(
         imageLabels: List<RawLabel>,
-        hasPhysicalObjects: Boolean
+        hasPhysicalObjects: Boolean,
+        hasFurnitureObjects: Boolean = false,
+        hasVehicleObjects: Boolean = false,
+        hasTablewareObjects: Boolean = false
     ): List<SpatialHazard> {
         var stairsConfidence = 0f
-        var armrestConfidence = 0f
         var furnitureConfidence = 0f
         var doorConfidence = 0f
         var wallConfidence = 0f
+        var branchConfidence = 0f
+        var handrailConfidence = 0f
+        var wheelConfidence = 0f
+        var saucerConfidence = 0f
+        var cabinetryConfidence = 0f
 
         for (label in imageLabels) {
             val textLower = label.text.lowercase(Locale.ROOT)
             val conf = label.confidence
 
             when {
-                textLower.contains("armrest") || textLower.contains("arm rest") -> {
-                    if (conf > armrestConfidence) armrestConfidence = conf
-                }
                 textLower.contains("chair") || textLower.contains("couch") ||
-                    textLower.contains("sofa") || textLower.contains("furniture") ||
-                    textLower.contains("seat") || textLower.contains("cushion") ||
-                    textLower.contains("recliner") -> {
+                    textLower.contains("sofa") || textLower.contains("loveseat") ||
+                    textLower.contains("furniture") || textLower.contains("seat") ||
+                    textLower.contains("cushion") || textLower.contains("recliner") ||
+                    textLower.contains("bench") || textLower.contains("desk") ||
+                    textLower.contains("bunk bed") -> {
                     if (conf > furnitureConfidence) furnitureConfidence = conf
+                }
+                textLower.contains("cabinetry") -> {
+                    if (conf > furnitureConfidence) furnitureConfidence = conf
+                    if (conf > cabinetryConfidence) cabinetryConfidence = conf
                 }
                 textLower.contains("stair") || textLower.contains("step") || textLower.contains("tread") -> {
                     if (conf > stairsConfidence) stairsConfidence = conf
+                }
+                textLower.contains("handrail") -> {
+                    if (conf > handrailConfidence) handrailConfidence = conf
+                }
+                textLower.contains("branch") -> {
+                    if (conf > branchConfidence) branchConfidence = conf
                 }
                 textLower.contains("door") -> {
                     if (conf > doorConfidence) doorConfidence = conf
@@ -45,20 +56,35 @@ class HazardClassifier {
                 textLower.contains("wall") -> {
                     if (conf > wallConfidence) wallConfidence = conf
                 }
+                textLower == "wheel" || textLower == "tire" -> {
+                    if (conf > wheelConfidence) wheelConfidence = conf
+                }
+                textLower == "saucer" -> {
+                    if (conf > saucerConfidence) saucerConfidence = conf
+                }
             }
         }
 
         val hazards = mutableListOf<SpatialHazard>()
 
-        // Critical disambiguation: armrest/furniture confidence suppresses stairs
-        val isArmrestDominant = armrestConfidence >= 0.40f ||
-            (furnitureConfidence >= 0.55f && stairsConfidence < 0.72f)
+        // Suppress false stairs triggered by striped furniture upholstery or cushions.
+        val furnitureSuppressesStairs =
+            (furnitureConfidence >= 0.55f && stairsConfidence < 0.78f) ||
+                (hasFurnitureObjects && stairsConfidence < 0.75f)
 
-        if (isArmrestDominant) {
-            val finalConf = armrestConfidence.coerceAtLeast(furnitureConfidence)
-            hazards.add(SpatialHazard.ArmrestDetected(finalConf))
-        } else if (stairsConfidence >= 0.65f && stairsConfidence > armrestConfidence + 0.20f) {
+        if (!furnitureSuppressesStairs &&
+            stairsConfidence >= 0.65f &&
+            stairsConfidence > furnitureConfidence + 0.10f
+        ) {
             hazards.add(SpatialHazard.StairsAhead(stairsConfidence))
+        }
+
+        if (branchConfidence >= 0.70f) {
+            hazards.add(SpatialHazard.LowBranchAhead(branchConfidence))
+        }
+
+        if (handrailConfidence >= 0.65f) {
+            hazards.add(SpatialHazard.HandrailAhead(handrailConfidence))
         }
 
         if (doorConfidence >= 0.55f) {
@@ -69,17 +95,19 @@ class HazardClassifier {
             hazards.add(SpatialHazard.WallProximity(wallConfidence))
         }
 
+        // Surface verified ML Kit object categories missing from COCO-80 when not already covered by a box.
+        when {
+            wheelConfidence >= 0.74f && !hasVehicleObjects -> {
+                hazards.add(SpatialHazard.SceneObjectAhead("wheel", wheelConfidence))
+            }
+            saucerConfidence >= 0.74f && !hasTablewareObjects -> {
+                hazards.add(SpatialHazard.SceneObjectAhead("saucer", saucerConfidence))
+            }
+            cabinetryConfidence >= 0.72f && !hasFurnitureObjects -> {
+                hazards.add(SpatialHazard.SceneObjectAhead("cabinetry", cabinetryConfidence))
+            }
+        }
+
         return hazards
     }
-
-    /**
-     * Returns true if the given object label indicates it belongs to the armrest/seating category.
-     */
-    fun isArmrestObject(rawText: String, isArmrestDominant: Boolean): Boolean =
-        isArmrestDominant && (
-            rawText.contains("furniture", ignoreCase = true) ||
-            rawText.contains("chair", ignoreCase = true) ||
-            rawText.contains("couch", ignoreCase = true) ||
-            rawText.contains("arm", ignoreCase = true)
-        )
 }

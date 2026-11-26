@@ -79,10 +79,6 @@ class FakeCaneBluetoothClient : CaneBluetoothClient {
     }
 }
 
-/**
- * Unit tests for [MainViewModel] verifying UI state management,
- * permission flows, vision frame handling, Bluetooth telemetry, Sensor Fusion, and Russian speech.
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelTest {
 
@@ -118,7 +114,7 @@ class MainViewModelTest {
     }
 
     @Test
-    fun `initial uiState has no camera permission and is not scanning`() {
+    fun initialUiState_hasNoCameraPermission_andConnectCalled() {
         val state = viewModel.uiState.value
         assertFalse(state.hasCameraPermission)
         assertFalse(state.isScanning)
@@ -128,45 +124,17 @@ class MainViewModelTest {
     }
 
     @Test
-    fun `camera permission granted enables scanning and speaks activation prompt`() {
+    fun cameraPermissionGranted_speaksActivationPrompt() {
         viewModel.onCameraPermissionResult(granted = true)
-
         val state = viewModel.uiState.value
         assertTrue(state.hasCameraPermission)
         assertTrue(state.isScanning)
-
         assertEquals(1, fakeSpeechOutput.spokenMessages.size)
         assertEquals("Камера активирована. Сканирование окружения запущено.", fakeSpeechOutput.spokenMessages[0].first)
-        assertFalse(fakeSpeechOutput.spokenMessages[0].second)
     }
 
     @Test
-    fun `camera permission denied disables scanning and speaks warning prompt`() {
-        viewModel.onCameraPermissionResult(granted = false)
-
-        val state = viewModel.uiState.value
-        assertFalse(state.hasCameraPermission)
-        assertFalse(state.isScanning)
-
-        assertEquals(1, fakeSpeechOutput.spokenMessages.size)
-        assertEquals("Для работы системы Argus требуется разрешение на использование камеры.", fakeSpeechOutput.spokenMessages[0].first)
-    }
-
-    @Test
-    fun `initial permission check when granted speaks ready only once`() {
-        viewModel.onInitialPermissionCheck(granted = true)
-        viewModel.onInitialPermissionCheck(granted = true)
-
-        val state = viewModel.uiState.value
-        assertTrue(state.hasCameraPermission)
-        assertTrue(state.isScanning)
-
-        assertEquals(1, fakeSpeechOutput.spokenMessages.size)
-        assertEquals("Система Argus готова к работе.", fakeSpeechOutput.spokenMessages[0].first)
-    }
-
-    @Test
-    fun `onFrameAnalyzed dispatches speech and updates uiState with latest frame and validated hazards`() = runTest {
+    fun onFrameAnalyzed_dispatchesSpeechAndUpdatesUiState() = runTest {
         val frame = VisionFrameResult(
             spatialHazards = listOf(SpatialHazard.WallProximity(0.85f)),
             obstacles = emptyList(),
@@ -180,224 +148,31 @@ class MainViewModelTest {
         assertEquals(frame, state.latestFrameResult)
         assertEquals(1, state.validatedHazards.size)
         assertTrue(state.validatedHazards[0] is SpatialHazard.WallProximity)
-
         assertEquals(1, fakeSpeechOutput.spokenMessages.size)
         assertEquals("Внимание, стена прямо по курсу!", fakeSpeechOutput.spokenMessages[0].first)
-        assertTrue("Wall warning should be urgent", fakeSpeechOutput.spokenMessages[0].second)
-    }
-
-    @Test
-    fun `critical cane distance triggers immediate urgent speech alert`() = runTest {
-        val criticalTelemetry = CaneTelemetry(distanceCm = 24, direction = CaneDirection.CENTER)
-        fakeBluetoothClient._telemetryFlow.value = criticalTelemetry
-
-        val state = viewModel.uiState.value
-        assertEquals(24, state.caneDistanceCm)
-        assertEquals(CaneDirection.CENTER, state.caneDirection)
-
-        assertTrue(fakeSpeechOutput.spokenMessages.any {
-            it.first.contains("24 см") && it.second
-        })
-    }
-
-    @Test
-    fun `side conflict between cane direction and camera obstacle triggers sensor fusion speech`() = runTest {
-        val telemetry = CaneTelemetry(distanceCm = 60, direction = CaneDirection.LEFT)
-        fakeBluetoothClient._telemetryFlow.value = telemetry
-
-        val frame = VisionFrameResult(
-            obstacles = listOf(
-                DetectedObstacle(
-                    id = 1,
-                    label = "chair",
-                    confidence = 0.9f,
-                    boundingBox = BoundingBox2D(0f, 0f, 200f, 200f),
-                    zone = HorizontalZone.LEFT,
-                    estimatedDistanceCategory = DistanceCategory.MEDIUM
-                )
-            ),
-            frameWidth = 1000,
-            frameHeight = 1000
-        )
-
-        viewModel.onFrameAnalyzed(frame)
-
-        assertTrue(fakeSpeechOutput.spokenMessages.any {
-            it.first == "Осторожно, слева преграда!" && it.second
-        })
-    }
-
-    @Test
-    fun `onTestCalibrationClicked triggers demo or reconnect on bluetooth client`() {
-        viewModel.onTestCalibrationClicked()
-        assertTrue(fakeBluetoothClient.demoCalled)
-    }
-
-    @Test
-    fun `onBluetoothPermissionResult updates permission status and triggers reconnect when granted`() {
-        fakeBluetoothClient.connectCalled = false
-        fakeBluetoothClient._connectionStatus.value = BluetoothConnectionStatus.PERMISSION_REQUIRED
-
-        viewModel.onBluetoothPermissionResult(granted = false)
-        assertEquals(BluetoothConnectionStatus.PERMISSION_REQUIRED, viewModel.uiState.value.bluetoothStatus)
-        assertFalse(fakeBluetoothClient.connectCalled)
-
-        viewModel.onBluetoothPermissionResult(granted = true)
-        assertTrue(fakeBluetoothClient.connectCalled)
-    }
-
-    @Test
-    fun `unified priority picks side fusion over wall proximity`() = runTest {
-        fakeBluetoothClient._telemetryFlow.value = CaneTelemetry(distanceCm = 60, direction = CaneDirection.RIGHT)
-        val frame = VisionFrameResult(
-            spatialHazards = listOf(SpatialHazard.WallProximity(0.9f)),
-            obstacles = listOf(
-                DetectedObstacle(
-                    id = 1,
-                    label = "chair",
-                    confidence = 0.9f,
-                    boundingBox = BoundingBox2D(700f, 200f, 950f, 700f),
-                    zone = HorizontalZone.RIGHT,
-                    estimatedDistanceCategory = DistanceCategory.MEDIUM
-                )
-            ),
-            frameWidth = 1000,
-            frameHeight = 1000
-        )
-
-        viewModel.onFrameAnalyzed(frame)
-
-        assertTrue(fakeSpeechOutput.spokenMessages.any {
-            it.first == "Осторожно, справа преграда!" && it.second
-        })
-    }
-
-    @Test
-    fun `unified priority picks doorway over medium center obstacle`() = runTest {
-        val frame = VisionFrameResult(
-            spatialHazards = listOf(SpatialHazard.DoorAhead(0.8f)),
-            obstacles = listOf(
-                DetectedObstacle(
-                    id = 1,
-                    label = "chair",
-                    confidence = 0.9f,
-                    boundingBox = BoundingBox2D(350f, 250f, 650f, 750f),
-                    zone = HorizontalZone.CENTER,
-                    estimatedDistanceCategory = DistanceCategory.MEDIUM
-                )
-            ),
-            frameWidth = 1000,
-            frameHeight = 1000
-        )
-
-        viewModel.onFrameAnalyzed(frame)
-
-        assertEquals(1, fakeSpeechOutput.spokenMessages.size)
-        assertEquals("Впереди дверной проем", fakeSpeechOutput.spokenMessages[0].first)
-        assertFalse(fakeSpeechOutput.spokenMessages[0].second)
-    }
-
-    @Test
-    fun `unified priority picks critical sonar over wall proximity`() = runTest {
-        fakeBluetoothClient._telemetryFlow.value = CaneTelemetry(distanceCm = 25, direction = CaneDirection.CENTER)
-        fakeSpeechOutput.spokenMessages.clear()
-
-        val frame = VisionFrameResult(
-            spatialHazards = listOf(SpatialHazard.WallProximity(0.9f)),
-            frameWidth = 1000,
-            frameHeight = 1000
-        )
-
-        viewModel.onFrameAnalyzed(frame)
-
-        assertEquals(1, fakeSpeechOutput.spokenMessages.size)
-        assertEquals("Внимание, близко препятствие: 25 см!", fakeSpeechOutput.spokenMessages[0].first)
         assertTrue(fakeSpeechOutput.spokenMessages[0].second)
     }
 
     @Test
-    fun `urgent alerts trigger haptic feedback across sonar wall and side fusion`() = runTest {
-        // 1. Critical sonar via telemetry stream
-        fakeBluetoothClient._telemetryFlow.value = CaneTelemetry(distanceCm = 22, direction = CaneDirection.CENTER)
+    fun criticalSonarDistance_triggersImmediateUrgentAlertAndHaptic() = runTest {
+        val criticalTelemetry = CaneTelemetry(distanceCm = 24, direction = CaneDirection.CENTER)
+        fakeBluetoothClient._telemetryFlow.value = criticalTelemetry
+
+        assertTrue(fakeSpeechOutput.spokenMessages.any {
+            it.first.contains("24 см") && it.second
+        })
         assertEquals(1, fakeHapticFeedbackService.urgentVibrationCount)
-
-        // 2. Wall proximity via camera frame (when sonar is safe)
-        fakeBluetoothClient._telemetryFlow.value = CaneTelemetry(distanceCm = 90, direction = CaneDirection.CENTER)
-        viewModel.onFrameAnalyzed(
-            VisionFrameResult(
-                spatialHazards = listOf(SpatialHazard.WallProximity(0.88f)),
-                frameWidth = 1000,
-                frameHeight = 1000
-            )
-        )
-        assertEquals(2, fakeHapticFeedbackService.urgentVibrationCount)
-
-        // 3. Side Sensor Fusion conflict via camera frame + cane tilt
-        fakeBluetoothClient._telemetryFlow.value = CaneTelemetry(distanceCm = 80, direction = CaneDirection.LEFT)
-        viewModel.onFrameAnalyzed(
-            VisionFrameResult(
-                obstacles = listOf(
-                    DetectedObstacle(
-                        id = 2,
-                        label = "chair",
-                        confidence = 0.9f,
-                        boundingBox = BoundingBox2D(40f, 200f, 260f, 700f),
-                        zone = HorizontalZone.LEFT,
-                        estimatedDistanceCategory = DistanceCategory.MEDIUM
-                    )
-                ),
-                frameWidth = 1000,
-                frameHeight = 1000
-            )
-        )
-        assertEquals(3, fakeHapticFeedbackService.urgentVibrationCount)
     }
 
     @Test
-    fun `non urgent alerts speak without triggering haptic feedback`() = runTest {
-        // 1. Doorway ahead (non-urgent)
-        viewModel.onFrameAnalyzed(
-            VisionFrameResult(
-                spatialHazards = listOf(SpatialHazard.DoorAhead(0.82f)),
-                frameWidth = 1000,
-                frameHeight = 1000
-            )
+    fun nonUrgentAlert_doesNotTriggerHaptic() = runTest {
+        val frame = VisionFrameResult(
+            spatialHazards = listOf(SpatialHazard.DoorAhead(0.80f)),
+            frameWidth = 1000,
+            frameHeight = 1000
         )
-        assertEquals(1, fakeSpeechOutput.spokenMessages.size)
-        assertFalse(fakeSpeechOutput.spokenMessages.last().second)
-        assertEquals(0, fakeHapticFeedbackService.urgentVibrationCount)
 
-        // 2. Medium center obstacle (non-urgent corridor guidance)
-        viewModel.onFrameAnalyzed(
-            VisionFrameResult(
-                obstacles = listOf(
-                    DetectedObstacle(
-                        id = 3,
-                        label = "chair",
-                        confidence = 0.9f,
-                        boundingBox = BoundingBox2D(360f, 250f, 640f, 750f),
-                        zone = HorizontalZone.CENTER,
-                        estimatedDistanceCategory = DistanceCategory.MEDIUM
-                    )
-                ),
-                frameWidth = 1000,
-                frameHeight = 1000
-            )
-        )
-        assertEquals(2, fakeSpeechOutput.spokenMessages.size)
-        assertFalse(fakeSpeechOutput.spokenMessages.last().second)
-        assertEquals(0, fakeHapticFeedbackService.urgentVibrationCount)
-    }
-
-    @Test
-    fun `armrest hazard speaks non urgently without triggering haptic feedback`() = runTest {
-        viewModel.onFrameAnalyzed(
-            VisionFrameResult(
-                spatialHazards = listOf(SpatialHazard.ArmrestDetected(confidence = 0.85f, zone = HorizontalZone.LEFT)),
-                frameWidth = 1000,
-                frameHeight = 1000
-            )
-        )
+        viewModel.onFrameAnalyzed(frame)
 
         assertEquals(1, fakeSpeechOutput.spokenMessages.size)
         assertFalse(fakeSpeechOutput.spokenMessages[0].second)

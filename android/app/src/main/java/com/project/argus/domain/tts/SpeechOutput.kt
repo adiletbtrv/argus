@@ -7,8 +7,6 @@ interface SpeechOutput {
      //@param urgent If true, interrupts and prioritizes over standard obstacle information.
     fun speak(text: String, urgent: Boolean = false)
 
-    /**
-     * Stops any currently ongoing speech utterance.
-     */
+    // Stops any currently ongoing speech utterance.
     fun stop()
 }

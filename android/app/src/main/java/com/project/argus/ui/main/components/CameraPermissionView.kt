@@ -27,9 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.project.argus.R
 
-/**
- * Screen presenting a clear rationale and action button to grant camera permissions.
- */
+// Screen presenting a clear rationale and action button to grant camera permissions.
 @Composable
 fun CameraPermissionView(
     onRequestPermission: () -> Unit,

@@ -5,9 +5,7 @@ import com.project.argus.domain.model.CaneDirection
 import com.project.argus.domain.model.SpatialHazard
 import com.project.argus.domain.model.VisionFrameResult
 
-/**
- * Immutable UI state model for the Main screen adhering to Unidirectional Data Flow.
- */
+// Immutable UI state model for the Main screen adhering to Unidirectional Data Flow.
 data class MainUiState(
     val hasCameraPermission: Boolean = false,
     val latestFrameResult: VisionFrameResult? = null,

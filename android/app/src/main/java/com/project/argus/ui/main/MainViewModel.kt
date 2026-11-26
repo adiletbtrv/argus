@@ -24,10 +24,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * Main ViewModel coordinating Vision analysis results, hazard arbitration,
- * cane Bluetooth telemetry, Sensor Fusion alerts, and Russian audio guidance.
- */
+// Main ViewModel coordinating Vision analysis results, hazard arbitration,
+// cane Bluetooth telemetry, Sensor Fusion alerts, and Russian audio guidance.
 class MainViewModel(
     private val evaluateHazardsUseCase: EvaluateHazardsUseCase,
     private val evaluateSensorFusionUseCase: EvaluateSensorFusionUseCase,

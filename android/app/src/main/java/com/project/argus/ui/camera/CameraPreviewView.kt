@@ -1,9 +1,12 @@
 package com.project.argus.ui.camera
 
+import android.util.Size as AndroidSize
 import android.view.ViewGroup
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
@@ -51,6 +54,7 @@ import com.project.argus.data.vision.VisionAnalyzer
 import com.project.argus.domain.bluetooth.BluetoothConnectionStatus
 import com.project.argus.domain.model.CaneDirection
 import com.project.argus.domain.model.HorizontalZone
+import com.project.argus.domain.model.ObstacleTranslator
 import com.project.argus.domain.model.SpatialHazard
 import com.project.argus.domain.model.VisionFrameResult
 import com.project.argus.ui.main.MainUiState
@@ -108,10 +112,8 @@ internal fun resolveCaneDistanceDisplay(distanceCm: Int?): CaneDistanceDisplay {
     }
 }
 
-/**
- * Camera preview composable integrating CameraX, real-time object tracking overlay,
- * and contextual hazard indicators according to official Android Jetpack Compose guidelines.
- */
+// Camera preview composable integrating CameraX, real-time object tracking overlay,
+// and contextual hazard indicators according to official Android Jetpack Compose guidelines.
 @Composable
 fun CameraPreviewScreen(
     uiState: MainUiState,
@@ -171,7 +173,17 @@ fun CameraPreviewScreen(
                         it.setSurfaceProvider(previewView.surfaceProvider)
                     }
 
+                    val resolutionSelector = ResolutionSelector.Builder()
+                        .setResolutionStrategy(
+                            ResolutionStrategy(
+                                AndroidSize(640, 480),
+                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                            )
+                        )
+                        .build()
+
                     val imageAnalysis = ImageAnalysis.Builder()
+                        .setResolutionSelector(resolutionSelector)
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                         .build()
@@ -239,14 +251,10 @@ fun CameraPreviewScreen(
                     val width = box.width() * scaleX
                     val height = box.height() * scaleY
 
-                    val boxColor = if (obstacle.isArmrest) {
-                        Color(0xFF29B6F6) // Light Blue for Armrest / Furniture
-                    } else {
-                        when (obstacle.zone) {
-                            HorizontalZone.CENTER -> Color(0xFFFF5252) // Red: Direct collision path
-                            HorizontalZone.LEFT -> Color(0xFFFFD740)   // Yellow: Left flank
-                            HorizontalZone.RIGHT -> Color(0xFF69F0AE)  // Green/Teal: Right flank
-                        }
+                    val boxColor = when (obstacle.zone) {
+                        HorizontalZone.CENTER -> Color(0xFFFF5252) // Red: Direct collision path
+                        HorizontalZone.LEFT -> Color(0xFFFFD740)   // Yellow: Left flank
+                        HorizontalZone.RIGHT -> Color(0xFF69F0AE)  // Green/Teal: Right flank
                     }
 
                     drawRect(
@@ -279,11 +287,21 @@ fun CameraPreviewScreen(
                                 backgroundColor = Color(0xFFD32F2F)
                             )
                         }
-                        is SpatialHazard.ArmrestDetected -> {
+                        is SpatialHazard.LowBranchAhead -> {
                             HazardBadge(
-                                title = stringResource(R.string.hazard_armrest_title),
+                                title = stringResource(R.string.hazard_branch_title),
                                 subtitle = stringResource(
-                                    R.string.hazard_armrest_sub,
+                                    R.string.hazard_branch_sub,
+                                    (hazard.confidence * 100).toInt()
+                                ),
+                                backgroundColor = Color(0xFFD84315)
+                            )
+                        }
+                        is SpatialHazard.HandrailAhead -> {
+                            HazardBadge(
+                                title = stringResource(R.string.hazard_handrail_title),
+                                subtitle = stringResource(
+                                    R.string.hazard_handrail_sub,
                                     (hazard.confidence * 100).toInt()
                                 ),
                                 backgroundColor = Color(0xFF0288D1)
@@ -304,6 +322,19 @@ fun CameraPreviewScreen(
                                     (hazard.confidence * 100).toInt()
                                 ),
                                 backgroundColor = Color(0xFF388E3C)
+                            )
+                        }
+                        is SpatialHazard.SceneObjectAhead -> {
+                            HazardBadge(
+                                title = stringResource(
+                                    R.string.hazard_scene_title,
+                                    ObstacleTranslator.translate(hazard.label).uppercase()
+                                ),
+                                subtitle = stringResource(
+                                    R.string.hazard_scene_sub,
+                                    (hazard.confidence * 100).toInt()
+                                ),
+                                backgroundColor = Color(0xFF00796B)
                             )
                         }
                         SpatialHazard.None -> Unit

@@ -15,7 +15,7 @@ data class AlertDecision(
 )
 
 interface AlertStrategy {
-    // Returns an [AlertDecision] if this strategy matches the current state, otherwise null.
+    // Returns an AlertDecision if this strategy matches the current state, otherwise null.
     fun evaluate(
         validatedHazards: List<SpatialHazard>,
         frame: VisionFrameResult
@@ -43,6 +43,27 @@ internal class StairsAlertStrategy : AlertStrategy {
     }
 }
 
+// Priority 1: Urgent overhead/low branch alert missed by ground cane sonar.
+internal class LowBranchAlertStrategy : AlertStrategy {
+    override fun evaluate(
+        validatedHazards: List<SpatialHazard>,
+        frame: VisionFrameResult
+    ): AlertDecision? {
+        validatedHazards.filterIsInstance<SpatialHazard.LowBranchAhead>().firstOrNull()
+            ?: return null
+        return AlertDecision(
+            spokenText = "Осторожно, впереди ветка!",
+            isUrgent = true,
+            validatedHazards = validatedHazards,
+            priority = PRIORITY_BRANCH
+        )
+    }
+
+    companion object {
+        const val PRIORITY_BRANCH = 1
+    }
+}
+
 // Priority 3: Urgent wall proximity alert.
 internal class WallProximityAlertStrategy : AlertStrategy {
     override fun evaluate(
@@ -64,13 +85,13 @@ internal class WallProximityAlertStrategy : AlertStrategy {
     }
 }
 
-// Priority 3: Urgent near obstacle directly in the center path (area >= 0.28).
+// Priority 3: Urgent near obstacle directly in the center path.
 internal class NearCenterObstacleAlertStrategy : AlertStrategy {
     override fun evaluate(
         validatedHazards: List<SpatialHazard>,
         frame: VisionFrameResult
     ): AlertDecision? {
-        val nearObstacle = findCenterObstacle(frame, DistanceCategory.NEAR) ?: return null
+        val nearObstacle = findHighestPriorityCenterObstacle(frame, DistanceCategory.NEAR) ?: return null
         val label = ObstacleTranslator.translate(nearObstacle.label)
         return AlertDecision(
             spokenText = "Вплотную, $label!",
@@ -85,29 +106,24 @@ internal class NearCenterObstacleAlertStrategy : AlertStrategy {
     }
 }
 
-// Priority 4: Armrest directional guidance with zone-aware phrasing.
-internal class ArmrestAlertStrategy : AlertStrategy {
+// Priority 4: Handrail guidance.
+internal class HandrailAlertStrategy : AlertStrategy {
     override fun evaluate(
         validatedHazards: List<SpatialHazard>,
         frame: VisionFrameResult
     ): AlertDecision? {
-        val armrest = validatedHazards.filterIsInstance<SpatialHazard.ArmrestDetected>().firstOrNull()
+        validatedHazards.filterIsInstance<SpatialHazard.HandrailAhead>().firstOrNull()
             ?: return null
-        val side = when (armrest.zone) {
-            HorizontalZone.LEFT -> "слева"
-            HorizontalZone.RIGHT -> "справа"
-            HorizontalZone.CENTER -> "впереди"
-        }
         return AlertDecision(
-            spokenText = "Подлокотник $side",
+            spokenText = "Впереди перила",
             isUrgent = false,
             validatedHazards = validatedHazards,
-            priority = PRIORITY_ARMREST
+            priority = PRIORITY_HANDRAIL
         )
     }
 
     companion object {
-        const val PRIORITY_ARMREST = 4
+        const val PRIORITY_HANDRAIL = 4
     }
 }
 
@@ -132,13 +148,35 @@ internal class DoorAheadAlertStrategy : AlertStrategy {
     }
 }
 
-// Priority 5: Medium-distance center obstacles (0.12 <= area < 0.28) with corridor bypass hints.
+// Priority 4: Verified ML Kit scene object not covered by COCO-80 bounding boxes.
+internal class SceneObjectAlertStrategy : AlertStrategy {
+    override fun evaluate(
+        validatedHazards: List<SpatialHazard>,
+        frame: VisionFrameResult
+    ): AlertDecision? {
+        val sceneObj = validatedHazards.filterIsInstance<SpatialHazard.SceneObjectAhead>().firstOrNull()
+            ?: return null
+        val translated = ObstacleTranslator.translate(sceneObj.label)
+        return AlertDecision(
+            spokenText = "Впереди $translated",
+            isUrgent = false,
+            validatedHazards = validatedHazards,
+            priority = PRIORITY_SCENE_OBJECT
+        )
+    }
+
+    companion object {
+        const val PRIORITY_SCENE_OBJECT = 4
+    }
+}
+
+// Priority 5: Medium-distance center obstacles with corridor bypass hints.
 internal class CenterCorridorAlertStrategy : AlertStrategy {
     override fun evaluate(
         validatedHazards: List<SpatialHazard>,
         frame: VisionFrameResult
     ): AlertDecision? {
-        val mediumObstacle = findCenterObstacle(frame, DistanceCategory.MEDIUM) ?: return null
+        val mediumObstacle = findHighestPriorityCenterObstacle(frame, DistanceCategory.MEDIUM) ?: return null
         val label = ObstacleTranslator.translate(mediumObstacle.label)
 
         val leftBlocked = isSideBlocked(frame, HorizontalZone.LEFT)
@@ -171,9 +209,13 @@ internal class CenterCorridorAlertStrategy : AlertStrategy {
     }
 }
 
-private fun findCenterObstacle(
+private fun findHighestPriorityCenterObstacle(
     frame: VisionFrameResult,
     category: DistanceCategory
-) = frame.obstacles.firstOrNull {
-    it.zone == HorizontalZone.CENTER && it.estimatedDistanceCategory == category
-}
+) = frame.obstacles
+    .filter { it.zone == HorizontalZone.CENTER && it.estimatedDistanceCategory == category }
+    .maxWithOrNull(
+        compareBy<com.project.argus.domain.model.DetectedObstacle> { it.dangerPriority }
+            .thenBy { it.boundingBox.area() }
+            .thenBy { it.confidence }
+    )

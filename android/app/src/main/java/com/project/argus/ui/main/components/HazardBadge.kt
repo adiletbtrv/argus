@@ -18,9 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * Reusable banner displaying spatial hazard alerts at the top of the viewfinder.
- */
+// Reusable banner displaying spatial hazard alerts at the top of the viewfinder.
 @Composable
 fun HazardBadge(
     title: String,

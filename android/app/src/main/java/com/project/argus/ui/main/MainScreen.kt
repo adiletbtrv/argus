@@ -15,9 +15,7 @@ import com.project.argus.domain.model.VisionFrameResult
 import com.project.argus.ui.camera.CameraPreviewScreen
 import com.project.argus.ui.main.components.CameraPermissionView
 
-/**
- * Screen-level composable managing permission workflow, status panels, and viewfinder presentation.
- */
+// Screen-level composable managing permission workflow, status panels, and viewfinder presentation.
 @Composable
 fun MainScreen(
     uiState: MainUiState,

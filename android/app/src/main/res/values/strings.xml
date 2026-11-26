@@ -8,12 +8,16 @@
     <string name="detected_objects">Обнаружено объектов: %1$d</string>
     <string name="in_path">По курсу: %1$s</string>
     <string name="scene_labels">Сцена: %1$s</string>
-    <string name="hazard_stairs_title">⚠️ ОСТОРОЖНО: ЛЕСТНИЦА ВПЕРЕДИ</string>
+    <string name="hazard_stairs_title">ОСТОРОЖНО: ЛЕСТНИЦА ВПЕРЕДИ</string>
     <string name="hazard_stairs_sub">Уверенность: %1$d%%</string>
-    <string name="hazard_armrest_title">🪑 ПОДЛОКОТНИК / МЕБЕЛЬ</string>
-    <string name="hazard_armrest_sub">Уверенность: %1$d%%</string>
-    <string name="hazard_wall_title">🧱 ВНИМАНИЕ: СТЕНА ПРЯМО ПО КУРСУ</string>
+    <string name="hazard_branch_title">ОСТОРОЖНО: ВПЕРЕДИ ВЕТКА</string>
+    <string name="hazard_branch_sub">Уверенность: %1$d%%</string>
+    <string name="hazard_handrail_title">ВПЕРЕДИ ПЕРИЛА</string>
+    <string name="hazard_handrail_sub">Уверенность: %1$d%%</string>
+    <string name="hazard_wall_title">ВНИМАНИЕ: СТЕНА ПРЯМО ПО КУРСУ</string>
     <string name="hazard_wall_sub">Препятствие на пути</string>
-    <string name="hazard_door_title">🚪 ВПЕРЕДИ ДВЕРНОЙ ПРОЕМ</string>
+    <string name="hazard_door_title">ВПЕРЕДИ ДВЕРНОЙ ПРОЕМ</string>
     <string name="hazard_door_sub">Уверенность: %1$d%%</string>
+    <string name="hazard_scene_title">ОБНАРУЖЕНО: %1$s</string>
+    <string name="hazard_scene_sub">Уверенность: %1$d%%</string>
 </resources>

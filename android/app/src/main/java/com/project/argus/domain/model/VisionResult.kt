@@ -11,24 +11,42 @@ data class BoundingBox2D(
     fun centerX(): Float = (left + right) / 2f
     fun centerY(): Float = (top + bottom) / 2f
     fun area(): Float = width() * height()
+
+    fun intersectionArea(other: BoundingBox2D): Float {
+        val interLeft = maxOf(left, other.left)
+        val interTop = maxOf(top, other.top)
+        val interRight = minOf(right, other.right)
+        val interBottom = minOf(bottom, other.bottom)
+        val w = (interRight - interLeft).coerceAtLeast(0f)
+        val h = (interBottom - interTop).coerceAtLeast(0f)
+        return w * h
+    }
+
+    fun iou(other: BoundingBox2D): Float {
+        val inter = intersectionArea(other)
+        if (inter <= 0f) return 0f
+        val union = area() + other.area() - inter
+        return if (union > 0f) inter / union else 0f
+    }
 }
 
-//Horizontal field of view zone for obstacle positioning.
+// Horizontal field of view zone for obstacle positioning.
 enum class HorizontalZone {
     LEFT,
     CENTER,
     RIGHT
 }
 
-//Spatial hazard indicators detected in the environment.
+// Spatial hazard indicators detected in the environment.
 sealed interface SpatialHazard {
     data object None : SpatialHazard
     data class StairsAhead(val confidence: Float) : SpatialHazard
-    data class ArmrestDetected(val confidence: Float, val zone: HorizontalZone = HorizontalZone.CENTER) : SpatialHazard
+    data class LowBranchAhead(val confidence: Float) : SpatialHazard
+    data class HandrailAhead(val confidence: Float) : SpatialHazard
     data class WallProximity(val confidence: Float) : SpatialHazard
     data class DoorAhead(val confidence: Float) : SpatialHazard
+    data class SceneObjectAhead(val label: String, val confidence: Float) : SpatialHazard
 }
-
 
 data class DetectedObstacle(
     val id: Int,
@@ -37,17 +55,15 @@ data class DetectedObstacle(
     val boundingBox: BoundingBox2D,
     val zone: HorizontalZone,
     val estimatedDistanceCategory: DistanceCategory,
-    val isArmrest: Boolean = false
+    val dangerPriority: Int = 1
 )
 
-
-// Frame area coverage thresholds synchronized with SpatialClassifier (< 6% is ignored).
+// Frame area coverage thresholds synchronized with SpatialClassifier.
 enum class DistanceCategory {
-    NEAR,    // High threat: covers >= 28% of frame area
-    MEDIUM,  // Moderate: covers 12%-28% of frame area
-    FAR      // Low: covers 6%-12% of frame area
+    NEAR,
+    MEDIUM,
+    FAR
 }
-
 
 data class VisionFrameResult(
     val obstacles: List<DetectedObstacle> = emptyList(),

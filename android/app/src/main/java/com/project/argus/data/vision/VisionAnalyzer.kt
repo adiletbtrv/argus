@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import com.google.mediapipe.framework.image.BitmapImageBuilder
@@ -14,22 +15,20 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.project.argus.domain.model.BoundingBox2D
+import com.project.argus.domain.model.ObstacleCatalog
 import com.project.argus.domain.model.VisionFrameResult
 import java.io.Closeable
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * CameraX ImageAnalysis analyzer utilizing MediaPipe Tasks Object Detection (EfficientDet-Lite0 COCO)
- * and Google ML Kit Image Labeling.
- * Delegates detection post-processing and spatial heuristics to [VisionProcessor].
- */
+// CameraX analyzer running on-device EfficientDet-Lite0 and ML Kit Image Labeling.
 class VisionAnalyzer(
     context: Context,
     private val processor: VisionProcessor = VisionResultProcessor(),
     private val onResult: (VisionFrameResult) -> Unit
 ) : ImageAnalysis.Analyzer, Closeable {
 
-    // 1. Object Detector: identifies physical COCO obstacles with Bounding Boxes
+    // Lower score threshold (0.38) and higher maxResults (10) improve recall on compact round items;
+    // VisionResultProcessor applies per-class thresholds, shadow/clothing filters, and temporal smoothing.
     private val objectDetector = ObjectDetector.createFromOptions(
         context,
         ObjectDetector.ObjectDetectorOptions.builder()
@@ -39,12 +38,11 @@ class VisionAnalyzer(
                     .build()
             )
             .setRunningMode(RunningMode.IMAGE)
-            .setScoreThreshold(0.5f)
-            .setMaxResults(5)
+            .setScoreThreshold(0.38f)
+            .setMaxResults(10)
             .build()
     )
 
-    // 2. Image Labeler: detects environmental context (Stairs, Armrest, Furniture, Wall, Door)
     private val imageLabeler = ImageLabeling.getClient(
         ImageLabelerOptions.Builder()
             .setConfidenceThreshold(0.40f)
@@ -52,9 +50,10 @@ class VisionAnalyzer(
     )
 
     private var lastAnalyzedTimestamp = 0L
-    private val frameIntervalMs = 180L // ~5.5 FPS for optimal battery and performance
+    private val frameIntervalMs = 180L
     private val isClosed = AtomicBoolean(false)
     private val nativeClosed = AtomicBoolean(false)
+    private val isProcessing = AtomicBoolean(false)
     private val detectorLock = Any()
 
     fun markClosing() {
@@ -74,8 +73,15 @@ class VisionAnalyzer(
             return
         }
 
+        // Prevent overlapping async ML Kit tasks from queuing multiple open ImageProxies.
+        if (!isProcessing.compareAndSet(false, true)) {
+            imageProxy.close()
+            return
+        }
+
         val mediaImage = imageProxy.image
         if (mediaImage == null) {
+            isProcessing.set(false)
             imageProxy.close()
             return
         }
@@ -127,14 +133,28 @@ class VisionAnalyzer(
                             } else {
                                 objectDetector.detect(mpImage).detections().map { detection ->
                                     val box = detection.boundingBox()
+                                    val domainBox = BoundingBox2D(
+                                        left = box.left,
+                                        top = box.top,
+                                        right = box.right,
+                                        bottom = box.bottom
+                                    )
+                                    val labels = detection.categories().map {
+                                        RawLabel(it.categoryName(), it.score())
+                                    }
+                                    val topName = labels.firstOrNull()?.text.orEmpty()
+                                    val needsAppearanceStats =
+                                        topName.equals("person", ignoreCase = true) ||
+                                            ObstacleCatalog.isAnimalClass(topName)
+                                    val appearanceStats = if (needsAppearanceStats) {
+                                        BitmapAppearanceExtractor.extractFromBitmap(preparedBitmap, domainBox)
+                                    } else {
+                                        null
+                                    }
                                     RawDetectedObject(
-                                        boundingBox = BoundingBox2D(
-                                            left = box.left,
-                                            top = box.top,
-                                            right = box.right,
-                                            bottom = box.bottom
-                                        ),
-                                        labels = detection.categories().map { RawLabel(it.categoryName(), it.score()) }
+                                        boundingBox = domainBox,
+                                        labels = labels,
+                                        appearanceStats = appearanceStats
                                     )
                                 }
                             }
@@ -143,7 +163,8 @@ class VisionAnalyzer(
                         mpImage.close()
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w(TAG, "Object detection failed for frame", e)
                 emptyList()
             } finally {
                 bitmap?.let { bmp ->
@@ -181,17 +202,19 @@ class VisionAnalyzer(
 
                     onResult(frameResult)
                 }
-                .addOnFailureListener {
-                    // Dropped or failed frame handled gracefully
+                .addOnFailureListener { e ->
+                    Log.w(TAG, "Image labeling failed for frame", e)
                 }
                 .addOnCompleteListener {
+                    isProcessing.set(false)
                     imageProxy.close()
                 }
             delegatedToLabeler = true
-        } catch (_: Exception) {
-            // Frame skipped; outer finally closes imageProxy if not delegated
+        } catch (e: Exception) {
+            Log.w(TAG, "Frame analysis aborted", e)
         } finally {
             if (!delegatedToLabeler) {
+                isProcessing.set(false)
                 imageProxy.close()
             }
         }
@@ -204,5 +227,9 @@ class VisionAnalyzer(
             runCatching { objectDetector.close() }
         }
         runCatching { imageLabeler.close() }
+    }
+
+    companion object {
+        private const val TAG = "VisionAnalyzer"
     }
 }

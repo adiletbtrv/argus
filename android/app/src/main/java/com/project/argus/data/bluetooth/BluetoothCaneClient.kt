@@ -31,15 +31,11 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
-/**
- * Android implementation of [CaneBluetoothClient] for HC-05 SPP Bluetooth Classic.
- *
- * Architectural constraints strictly enforced:
- * 1. UNIDIRECTIONAL: Cane -> Phone only. Absolutely NO OutputStream.write() or send() calls exist.
- * 2. Standard SPP UUID: 00001101-0000-1000-8000-00805F9B34FB.
- * 3. Thread safety & coroutine lifecycle managed on [ioDispatcher].
- * 4. Graceful handling of Android 12+ BLUETOOTH_CONNECT permission.
- */
+// Android implementation of CaneBluetoothClient for HC-05 SPP Bluetooth Classic.
+// Unidirectional: Cane to Phone only. No outbound write or send calls.
+// Standard SPP UUID: 00001101-0000-1000-8000-00805F9B34FB.
+// Thread safety and coroutine lifecycle managed on ioDispatcher.
+// Handles Android 12+ BLUETOOTH_CONNECT permission gracefully.
 class BluetoothCaneClient(
     private val context: Context,
     private val coroutineScope: CoroutineScope,
@@ -307,10 +303,8 @@ class BluetoothCaneClient(
         }
     }
 
-    /**
-     * Local test simulation for jury presentation when hardware cane is not connected.
-     * Emits realistic telemetry events locally without sending anything to hardware.
-     */
+    // Local test simulation for jury presentation when hardware cane is not connected.
+    // Emits realistic telemetry events locally without sending anything to hardware.
     private fun runLocalDemoSequence() {
         disconnect()
         val generation = connectionGeneration.incrementAndGet()

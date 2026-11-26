@@ -12,10 +12,8 @@ class LabelFormatter {
         "hair drier" to "hair dryer"
     )
 
-    /**
-     * Formats a raw detection label into a clean display string.
-     * Applies alias mappings and capitalizes the first character for UI presentation.
-     */
+    // Formats a raw detection label into a clean display string.
+    // Applies alias mappings and capitalizes the first character for UI presentation.
     fun format(raw: String): String {
         val trimmed = raw.trim()
         val mapped = aliasMap[trimmed.lowercase(Locale.ROOT)] ?: trimmed

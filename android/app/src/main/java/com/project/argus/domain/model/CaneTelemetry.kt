@@ -27,10 +27,8 @@ data class CaneTelemetry(
 
         private val TELEMETRY_REGEX = Regex("""DIST:(-?\d+),DIR:(\w+)""")
 
-        /**
-         * Parses telemetry line in format "DIST:<cm>,DIR:<DIR>".
-         * Returns CaneTelemetry if parsed successfully, null otherwise.
-         */
+        // Parses telemetry line in format "DIST:<cm>,DIR:<DIR>".
+        // Returns CaneTelemetry if parsed successfully, null otherwise.
         fun parse(line: String): CaneTelemetry? {
             val match = TELEMETRY_REGEX.find(line.trim()) ?: return null
             val dist = match.groupValues[1].toIntOrNull() ?: return null
