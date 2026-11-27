@@ -6,11 +6,9 @@ import java.util.Locale
 class HazardClassifier {
 
     /**
-     * Analyzes raw image labels and returns the list of spatial hazards detected in this frame.
-     *
-     * @param imageLabels Raw classification labels from ML Kit Image Labeler.
-     * @param hasPhysicalObjects True if the Object Detector found at least one bounding-box object,
-     *        used to suppress [SpatialHazard.WallProximity] when a real object is in the foreground.
+     * Analyzes raw ML Kit image labels and returns spatial hazards detected in this frame.
+     * Furniture and armrest context suppresses false stair detections caused by striped upholstery
+     * when [stairsConfidence] < 0.72f without emitting noisy furniture/armrest hazards.
      */
     fun classify(
         imageLabels: List<RawLabel>,
@@ -50,14 +48,15 @@ class HazardClassifier {
 
         val hazards = mutableListOf<SpatialHazard>()
 
-        // Critical disambiguation: armrest/furniture confidence suppresses stairs
-        val isArmrestDominant = armrestConfidence >= 0.40f ||
-            (furnitureConfidence >= 0.55f && stairsConfidence < 0.72f)
+        // Suppress false stairs triggered by striped couch/chair upholstery when stairs < 0.72f
+        val suppressedByFurnitureContext =
+            (armrestConfidence >= 0.40f || furnitureConfidence >= 0.55f) &&
+                stairsConfidence < 0.72f
 
-        if (isArmrestDominant) {
-            val finalConf = armrestConfidence.coerceAtLeast(furnitureConfidence)
-            hazards.add(SpatialHazard.ArmrestDetected(finalConf))
-        } else if (stairsConfidence >= 0.65f && stairsConfidence > armrestConfidence + 0.20f) {
+        if (!suppressedByFurnitureContext &&
+            stairsConfidence >= 0.65f &&
+            stairsConfidence > armrestConfidence + 0.20f
+        ) {
             hazards.add(SpatialHazard.StairsAhead(stairsConfidence))
         }
 
@@ -71,15 +70,4 @@ class HazardClassifier {
 
         return hazards
     }
-
-    /**
-     * Returns true if the given object label indicates it belongs to the armrest/seating category.
-     */
-    fun isArmrestObject(rawText: String, isArmrestDominant: Boolean): Boolean =
-        isArmrestDominant && (
-            rawText.contains("furniture", ignoreCase = true) ||
-            rawText.contains("chair", ignoreCase = true) ||
-            rawText.contains("couch", ignoreCase = true) ||
-            rawText.contains("arm", ignoreCase = true)
-        )
 }

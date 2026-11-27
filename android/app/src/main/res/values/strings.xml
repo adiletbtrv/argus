@@ -10,8 +10,6 @@
     <string name="scene_labels">Сцена: %1$s</string>
     <string name="hazard_stairs_title">ОСТОРОЖНО: ЛЕСТНИЦА ВПЕРЕДИ</string>
     <string name="hazard_stairs_sub">Уверенность: %1$d%%</string>
-    <string name="hazard_armrest_title">ПОДЛОКОТНИК / МЕБЕЛЬ</string>
-    <string name="hazard_armrest_sub">Уверенность: %1$d%%</string>
     <string name="hazard_wall_title">ВНИМАНИЕ: СТЕНА ПРЯМО ПО КУРСУ</string>
     <string name="hazard_wall_sub">Препятствие на пути</string>
     <string name="hazard_door_title">ВПЕРЕДИ ДВЕРНОЙ ПРОЕМ</string>

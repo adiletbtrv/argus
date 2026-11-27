@@ -39,12 +39,12 @@ class VisionAnalyzer(
                     .build()
             )
             .setRunningMode(RunningMode.IMAGE)
-            .setScoreThreshold(0.5f)
-            .setMaxResults(5)
+            .setScoreThreshold(0.45f)
+            .setMaxResults(7)
             .build()
     )
 
-    // 2. Image Labeler: detects environmental context (Stairs, Armrest, Furniture, Wall, Door)
+    // 2. Image Labeler: detects environmental context (Stairs, Furniture, Wall, Door)
     private val imageLabeler = ImageLabeling.getClient(
         ImageLabelerOptions.Builder()
             .setConfidenceThreshold(0.40f)
@@ -207,6 +207,7 @@ class VisionAnalyzer(
 
     override fun close() {
         isClosed.set(true)
+        processor.reset()
         if (!nativeClosed.compareAndSet(false, true)) return
         synchronized(detectorLock) {
             runCatching { objectDetector.close() }

@@ -3,10 +3,9 @@ package com.project.argus.domain.usecase
 import com.project.argus.domain.model.SpatialHazard
 import com.project.argus.domain.model.VisionFrameResult
 
-
 class EvaluateHazardsUseCase(
-     //Priority-ordered list of alert strategies.
-     //Evaluated top-to-bottom; first match wins.
+    // Priority-ordered list of alert strategies.
+    // Evaluated top-to-bottom; first match wins.
     private val alertStrategies: List<AlertStrategy> = defaultStrategies()
 ) {
     private var consecutiveStairsCount = 0
@@ -25,24 +24,15 @@ class EvaluateHazardsUseCase(
         return AlertDecision(spokenText = null, isUrgent = false, validatedHazards = validatedHazards)
     }
 
-
-    //Applies temporal debouncing to stairs and collects confirmed hazards
+    // Applies temporal debouncing to stairs and collects confirmed hazards.
     private fun validateHazards(frameResult: VisionFrameResult, now: Long): List<SpatialHazard> {
         val validatedHazards = mutableListOf<SpatialHazard>()
-
-        val armrestHazard = frameResult.spatialHazards
-            .filterIsInstance<SpatialHazard.ArmrestDetected>()
-            .firstOrNull()
 
         val rawStairsHazard = frameResult.spatialHazards
             .filterIsInstance<SpatialHazard.StairsAhead>()
             .firstOrNull()
 
-        // 1. Armrest vs Stairs temporal arbitration
-        if (armrestHazard != null) {
-            consecutiveStairsCount = 0
-            validatedHazards.add(armrestHazard)
-        } else if (rawStairsHazard != null) {
+        if (rawStairsHazard != null) {
             if (now - lastStairsTime < 750L) {
                 consecutiveStairsCount++
             } else {
@@ -54,12 +44,9 @@ class EvaluateHazardsUseCase(
                 validatedHazards.add(rawStairsHazard)
             }
         } else {
-            if (now - lastStairsTime > 800L) {
-                consecutiveStairsCount = 0
-            }
+            consecutiveStairsCount = 0
         }
 
-        // 2. Additional environmental hazards (no debouncing needed)
         frameResult.spatialHazards.forEach { hazard ->
             when (hazard) {
                 is SpatialHazard.WallProximity -> validatedHazards.add(hazard)
@@ -77,12 +64,11 @@ class EvaluateHazardsUseCase(
     }
 
     companion object {
-        //Default priority-ordered strategies used in production.
+        // Default priority-ordered strategies used in production.
         fun defaultStrategies(): List<AlertStrategy> = listOf(
             StairsAlertStrategy(),
             WallProximityAlertStrategy(),
             NearCenterObstacleAlertStrategy(),
-            ArmrestAlertStrategy(),
             DoorAheadAlertStrategy(),
             CenterCorridorAlertStrategy()
         )

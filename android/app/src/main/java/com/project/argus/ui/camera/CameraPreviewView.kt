@@ -252,14 +252,10 @@ fun CameraPreviewScreen(
                     val width = box.width() * scaleX
                     val height = box.height() * scaleY
 
-                    val boxColor = if (obstacle.isArmrest) {
-                        Color(0xFF29B6F6) // Light Blue for Armrest / Furniture
-                    } else {
-                        when (obstacle.zone) {
-                            HorizontalZone.CENTER -> Color(0xFFFF5252) // Red: Direct collision path
-                            HorizontalZone.LEFT -> Color(0xFFFFD740)   // Yellow: Left flank
-                            HorizontalZone.RIGHT -> Color(0xFF69F0AE)  // Green/Teal: Right flank
-                        }
+                    val boxColor = when (obstacle.zone) {
+                        HorizontalZone.CENTER -> Color(0xFFFF5252) // Red: Direct collision path
+                        HorizontalZone.LEFT -> Color(0xFFFFD740)   // Yellow: Left flank
+                        HorizontalZone.RIGHT -> Color(0xFF69F0AE)  // Green/Teal: Right flank
                     }
 
                     drawRect(
@@ -290,16 +286,6 @@ fun CameraPreviewScreen(
                                     (hazard.confidence * 100).toInt()
                                 ),
                                 backgroundColor = Color(0xFFD32F2F)
-                            )
-                        }
-                        is SpatialHazard.ArmrestDetected -> {
-                            HazardBadge(
-                                title = stringResource(R.string.hazard_armrest_title),
-                                subtitle = stringResource(
-                                    R.string.hazard_armrest_sub,
-                                    (hazard.confidence * 100).toInt()
-                                ),
-                                backgroundColor = Color(0xFF0288D1)
                             )
                         }
                         is SpatialHazard.WallProximity -> {

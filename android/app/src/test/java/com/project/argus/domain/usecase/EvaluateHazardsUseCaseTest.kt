@@ -15,7 +15,7 @@ import org.junit.Test
 
 /**
  * Unit tests for [EvaluateHazardsUseCase] verifying temporal debouncing,
- * armrest vs stairs suppression, priority alert hierarchy, Russian alerts, and corridor heuristics.
+ * priority alert hierarchy, danger-priority gating, Russian alerts, and corridor heuristics.
  */
 class EvaluateHazardsUseCaseTest {
 
@@ -62,28 +62,26 @@ class EvaluateHazardsUseCaseTest {
     }
 
     @Test
-    fun `armrest detection immediately suppresses stairs accumulator`() {
+    fun `intervening furniture suppressed frame resets stairs accumulator`() {
         val stairsFrame = VisionFrameResult(
             spatialHazards = listOf(SpatialHazard.StairsAhead(confidence = 0.80f))
         )
-        val armrestFrame = VisionFrameResult(
-            spatialHazards = listOf(SpatialHazard.ArmrestDetected(confidence = 0.60f, zone = HorizontalZone.CENTER))
+        val suppressedFurnitureFrame = VisionFrameResult(
+            spatialHazards = emptyList()
         )
 
         // Frame 1: Stairs (count = 1)
         useCase(stairsFrame)
 
-        // Frame 2: Armrest arrives -> cancels stairs accumulator
-        val decision = useCase(armrestFrame)
+        // Frame 2: Furniture suppressed stairs -> resets accumulator to 0 without armrest speech
+        val decision2 = useCase(suppressedFurnitureFrame)
+        assertNull(decision2.spokenText)
+        assertFalse(decision2.isUrgent)
+        assertTrue(decision2.validatedHazards.isEmpty())
 
-        assertEquals("Подлокотник впереди", decision.spokenText)
-        assertFalse(decision.isUrgent)
-        assertTrue(decision.validatedHazards.any { it is SpatialHazard.ArmrestDetected })
-        assertFalse(decision.validatedHazards.any { it is SpatialHazard.StairsAhead })
-
-        // Frame 3: Another stairs frame should NOT trigger alert because counter was reset to 0
+        // Frame 3: Single stairs glint again must NOT trigger alert because counter was reset
         val decision3 = useCase(stairsFrame)
-        assertNull("Stairs must be debounced again after reset", decision3.spokenText)
+        assertNull("Stairs must be debounced again after non-consecutive frame", decision3.spokenText)
     }
 
     // 2. Alert Priority Hierarchy Tests
@@ -134,24 +132,6 @@ class EvaluateHazardsUseCaseTest {
     }
 
     @Test
-    fun `armrest directional alerts announce correct zone`() {
-        val leftFrame = VisionFrameResult(
-            spatialHazards = listOf(SpatialHazard.ArmrestDetected(0.6f, HorizontalZone.LEFT))
-        )
-        val rightFrame = VisionFrameResult(
-            spatialHazards = listOf(SpatialHazard.ArmrestDetected(0.6f, HorizontalZone.RIGHT))
-        )
-
-        val leftDecision = useCase(leftFrame)
-        assertEquals("Подлокотник слева", leftDecision.spokenText)
-        assertFalse(leftDecision.isUrgent)
-
-        val rightDecision = useCase(rightFrame)
-        assertEquals("Подлокотник справа", rightDecision.spokenText)
-        assertFalse(rightDecision.isUrgent)
-    }
-
-    @Test
     fun `door ahead triggers doorway prompt`() {
         val frame = VisionFrameResult(
             spatialHazards = listOf(SpatialHazard.DoorAhead(0.7f))
@@ -164,10 +144,9 @@ class EvaluateHazardsUseCaseTest {
     }
 
     @Test
-    fun `near center obstacle takes priority over doorway and armrest`() {
+    fun `near center obstacle takes priority over doorway`() {
         val frame = VisionFrameResult(
             spatialHazards = listOf(
-                SpatialHazard.ArmrestDetected(0.7f, HorizontalZone.LEFT),
                 SpatialHazard.DoorAhead(0.8f)
             ),
             obstacles = listOf(
@@ -213,26 +192,94 @@ class EvaluateHazardsUseCaseTest {
     }
 
     @Test
-    fun `armrest takes priority over medium center obstacle`() {
-        val frame = VisionFrameResult(
-            spatialHazards = listOf(SpatialHazard.ArmrestDetected(0.65f, HorizontalZone.RIGHT)),
+    fun `low risk priority 1 obstacle in near center is downgraded to non urgent priority 5`() {
+        val ballFrame = VisionFrameResult(
             obstacles = listOf(
                 DetectedObstacle(
-                    id = 1,
-                    label = "chair",
-                    confidence = 0.9f,
-                    boundingBox = BoundingBox2D(350f, 250f, 650f, 750f),
+                    id = 0,
+                    label = "Ball",
+                    confidence = 0.88f,
+                    boundingBox = BoundingBox2D(250f, 250f, 750f, 750f),
                     zone = HorizontalZone.CENTER,
-                    estimatedDistanceCategory = DistanceCategory.MEDIUM
+                    estimatedDistanceCategory = DistanceCategory.NEAR
+                )
+            )
+        )
+        val handbagFrame = VisionFrameResult(
+            obstacles = listOf(
+                DetectedObstacle(
+                    id = 0,
+                    label = "handbag",
+                    confidence = 0.86f,
+                    boundingBox = BoundingBox2D(250f, 250f, 750f, 750f),
+                    zone = HorizontalZone.CENTER,
+                    estimatedDistanceCategory = DistanceCategory.NEAR
+                )
+            )
+        )
+
+        val ballDecision = useCase(ballFrame)
+        assertEquals("Прямо мяч, обойдите слева", ballDecision.spokenText)
+        assertFalse("sports ball must never trigger isUrgent = true", ballDecision.isUrgent)
+        assertEquals(5, ballDecision.priority)
+
+        val bagDecision = useCase(handbagFrame)
+        assertEquals("Прямо сумка, обойдите слева", bagDecision.spokenText)
+        assertFalse("handbag must never trigger isUrgent = true", bagDecision.isUrgent)
+        assertEquals(5, bagDecision.priority)
+    }
+
+    @Test
+    fun `door ahead priority 4 takes precedence over near low risk priority 1 item`() {
+        val frame = VisionFrameResult(
+            spatialHazards = listOf(SpatialHazard.DoorAhead(0.78f)),
+            obstacles = listOf(
+                DetectedObstacle(
+                    id = 0,
+                    label = "umbrella",
+                    confidence = 0.90f,
+                    boundingBox = BoundingBox2D(250f, 200f, 750f, 800f),
+                    zone = HorizontalZone.CENTER,
+                    estimatedDistanceCategory = DistanceCategory.NEAR
                 )
             )
         )
 
         val decision = useCase(frame)
 
-        assertEquals("Подлокотник справа", decision.spokenText)
+        assertEquals("Впереди дверной проем", decision.spokenText)
         assertFalse(decision.isUrgent)
         assertEquals(4, decision.priority)
+    }
+
+    @Test
+    fun `person in near center takes priority over chair in near center`() {
+        val frame = VisionFrameResult(
+            obstacles = listOf(
+                DetectedObstacle(
+                    id = 0,
+                    label = "chair",
+                    confidence = 0.95f,
+                    boundingBox = BoundingBox2D(250f, 200f, 750f, 800f),
+                    zone = HorizontalZone.CENTER,
+                    estimatedDistanceCategory = DistanceCategory.NEAR
+                ),
+                DetectedObstacle(
+                    id = 1,
+                    label = "person",
+                    confidence = 0.80f,
+                    boundingBox = BoundingBox2D(260f, 150f, 740f, 850f),
+                    zone = HorizontalZone.CENTER,
+                    estimatedDistanceCategory = DistanceCategory.NEAR
+                )
+            )
+        )
+
+        val decision = useCase(frame)
+
+        assertEquals("Вплотную, человек!", decision.spokenText)
+        assertTrue(decision.isUrgent)
+        assertEquals(3, decision.priority)
     }
 
     // 3. Obstacle Collision Warnings in Center Zone

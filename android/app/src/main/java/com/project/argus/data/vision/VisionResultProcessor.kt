@@ -1,37 +1,29 @@
 package com.project.argus.data.vision
 
 import com.project.argus.domain.model.DetectedObstacle
+import com.project.argus.domain.model.ObstacleCatalog
 import com.project.argus.domain.model.VisionFrameResult
 
 /**
- * Responsible solely for orchestrating the vision post-processing pipeline:
- * filters allowed COCO obstacle classes and suppresses noise below area threshold,
- * delegates hazard classification to [HazardClassifier], geometry to [SpatialClassifier],
- * and label formatting to [LabelFormatter].
+ * Orchestrates the vision post-processing pipeline:
+ * filters curated COCO navigation classes, applies compact/standard area gates,
+ * stabilizes moderate detections via [TemporalObjectTracker], classifies scene hazards
+ * via [HazardClassifier], and orders obstacles by threat priority.
  */
 class VisionResultProcessor(
     private val hazardClassifier: HazardClassifier = HazardClassifier(),
     private val spatialClassifier: SpatialClassifier = SpatialClassifier(),
-    private val labelFormatter: LabelFormatter = LabelFormatter()
+    private val labelFormatter: LabelFormatter = LabelFormatter(),
+    private val temporalTracker: TemporalObjectTracker = TemporalObjectTracker()
 ) : VisionProcessor {
 
     companion object {
-        val ALLOWED_OBJECT_CLASSES = setOf(
-            "person",
-            "chair",
-            "dining table",
-            "bench",
-            "backpack",
-            "suitcase",
-            "potted plant",
-            "car",
-            "bicycle",
-            "dog"
-        )
+        val ALLOWED_OBJECT_CLASSES: Set<String> = ObstacleCatalog.allowedCocoClasses
+        const val MIN_DETECTION_CONFIDENCE = 0.45f
     }
 
     fun isAllowedObject(label: String): Boolean {
-        return ALLOWED_OBJECT_CLASSES.contains(label.trim().lowercase())
+        return ObstacleCatalog.isAllowedCocoClass(label)
     }
 
     override fun process(
@@ -45,49 +37,93 @@ class VisionResultProcessor(
             "${labelFormatter.format(label.text)} (${(label.confidence * 100).toInt()}%)"
         }
 
+        temporalTracker.pruneExpired(timestamp)
+
         val totalArea = (imageWidth * imageHeight).toFloat()
-
-        val validObjects = detectedObjects.filter { obj ->
-            val topLabel = obj.labels.firstOrNull()?.text?.trim()?.lowercase()
-            val isAllowed = topLabel != null && topLabel in ALLOWED_OBJECT_CLASSES
-            val isNotIgnored = !spatialClassifier.isIgnored(obj.boundingBox.area(), totalArea)
-            isAllowed && isNotIgnored
-        }
-
-        val hazards = hazardClassifier.classify(
-            imageLabels = imageLabels,
-            hasPhysicalObjects = validObjects.isNotEmpty()
-        )
-
-        val isArmrestDominant = hazards.any { it is com.project.argus.domain.model.SpatialHazard.ArmrestDetected }
-
-        val obstacles = validObjects.mapIndexed { index, mlObject ->
-            val box = mlObject.boundingBox
-            val zone = spatialClassifier.classifyZone(box.centerX(), imageWidth)
-            val distanceCategory = spatialClassifier.classifyDistance(box.area(), totalArea)
-            val rawText = mlObject.labels.firstOrNull()?.text ?: "Obstacle"
-            val isArmrestObj = hazardClassifier.isArmrestObject(rawText, isArmrestDominant)
-            val label = if (isArmrestObj) "Armrest" else labelFormatter.format(rawText)
-            val confidence = mlObject.labels.firstOrNull()?.confidence ?: 0.6f
-
-            DetectedObstacle(
-                id = index,
-                label = label,
-                confidence = confidence,
-                boundingBox = box,
-                zone = zone,
-                estimatedDistanceCategory = distanceCategory,
-                isArmrest = isArmrestObj
+        if (totalArea <= 0f) {
+            return VisionFrameResult(
+                obstacles = emptyList(),
+                spatialHazards = hazardClassifier.classify(
+                    imageLabels = imageLabels,
+                    hasPhysicalObjects = false
+                ),
+                rawLabels = rawLabels,
+                frameWidth = imageWidth,
+                frameHeight = imageHeight,
+                timestamp = timestamp
             )
         }
 
+        val confirmedObstacles = mutableListOf<DetectedObstacle>()
+
+        for (mlObject in detectedObjects) {
+            val topLabel = mlObject.labels.firstOrNull() ?: continue
+            val spec = ObstacleCatalog.findSpec(topLabel.text) ?: continue
+            val confidence = topLabel.confidence
+            if (confidence < MIN_DETECTION_CONFIDENCE) continue
+
+            val box = mlObject.boundingBox
+            if (spatialClassifier.isIgnored(box.area(), totalArea, isCompact = spec.isCompact)) {
+                continue
+            }
+
+            val distanceCategory = spatialClassifier.classifyDistance(
+                boxArea = box.area(),
+                totalArea = totalArea,
+                isCompact = spec.isCompact
+            )
+
+            val confirmed = temporalTracker.isConfirmed(
+                label = spec.cocoLabel,
+                box = box,
+                confidence = confidence,
+                distanceCategory = distanceCategory,
+                timestampMs = timestamp,
+                frameWidth = imageWidth,
+                frameHeight = imageHeight
+            )
+            if (!confirmed) continue
+
+            val zone = spatialClassifier.classifyZone(box.centerX(), imageWidth)
+            val label = labelFormatter.format(spec.cocoLabel)
+
+            confirmedObstacles.add(
+                DetectedObstacle(
+                    id = 0,
+                    label = label,
+                    confidence = confidence,
+                    boundingBox = box,
+                    zone = zone,
+                    estimatedDistanceCategory = distanceCategory,
+                    dangerPriority = spec.dangerPriority
+                )
+            )
+        }
+
+        val sortedObstacles = confirmedObstacles
+            .sortedWith(
+                compareByDescending<DetectedObstacle> { it.dangerPriority }
+                    .thenBy { it.estimatedDistanceCategory.ordinal }
+                    .thenByDescending { it.confidence }
+            )
+            .mapIndexed { index, obstacle -> obstacle.copy(id = index) }
+
+        val hazards = hazardClassifier.classify(
+            imageLabels = imageLabels,
+            hasPhysicalObjects = sortedObstacles.isNotEmpty()
+        )
+
         return VisionFrameResult(
-            obstacles = obstacles,
+            obstacles = sortedObstacles,
             spatialHazards = hazards,
             rawLabels = rawLabels,
             frameWidth = imageWidth,
             frameHeight = imageHeight,
             timestamp = timestamp
         )
+    }
+
+    override fun reset() {
+        temporalTracker.reset()
     }
 }
