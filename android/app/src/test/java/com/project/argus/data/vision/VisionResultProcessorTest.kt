@@ -323,4 +323,72 @@ class VisionResultProcessorTest {
         assertEquals(HorizontalZone.LEFT, result.obstacles[0].zone)
         assertTrue(result.spatialHazards.any { it is SpatialHazard.DoorAhead })
     }
+
+    @Test
+    fun `VisionResultProcessor - filters cast shadow person while keeping real person`() {
+        val processor = VisionResultProcessor()
+        val realPerson = RawDetectedObject(
+            boundingBox = BoundingBox2D(150f, 150f, 450f, 800f),
+            labels = listOf(RawLabel("person", 0.88f)),
+            appearanceStats = BoxAppearanceStats(
+                meanLuminance = 115f,
+                luminanceStdDev = 36f,
+                meanGradient = 22f,
+                colorSpread = 28f,
+                borderMeanLuminance = 105f,
+                quadrantMeanSpread = 30f
+            )
+        )
+        val attachedShadow = RawDetectedObject(
+            boundingBox = BoundingBox2D(460f, 520f, 720f, 820f),
+            labels = listOf(RawLabel("person", 0.56f)),
+            appearanceStats = BoxAppearanceStats(
+                meanLuminance = 38f,
+                luminanceStdDev = 11f,
+                meanGradient = 7f,
+                colorSpread = 6f,
+                borderMeanLuminance = 92f,
+                quadrantMeanSpread = 7f
+            )
+        )
+
+        val result = processor.process(
+            detectedObjects = listOf(realPerson, attachedShadow),
+            imageLabels = emptyList(),
+            imageWidth = 1000,
+            imageHeight = 1000,
+            timestamp = 1000L
+        )
+
+        assertEquals(1, result.obstacles.size)
+        assertEquals("Person", result.obstacles[0].label)
+        assertEquals(0.88f, result.obstacles[0].confidence, 0.001f)
+    }
+
+    @Test
+    fun `VisionResultProcessor - filters clothing animal false positive inside person torso while keeping real dog`() {
+        val processor = VisionResultProcessor()
+        val person = RawDetectedObject(
+            boundingBox = BoundingBox2D(100f, 100f, 500f, 900f),
+            labels = listOf(RawLabel("person", 0.90f))
+        )
+        val furCoatFalseCat = RawDetectedObject(
+            boundingBox = BoundingBox2D(150f, 250f, 450f, 650f),
+            labels = listOf(RawLabel("cat", 0.62f))
+        )
+        val realDogOnFloor = RawDetectedObject(
+            boundingBox = BoundingBox2D(600f, 550f, 920f, 900f),
+            labels = listOf(RawLabel("dog", 0.72f))
+        )
+
+        val result = processor.process(
+            detectedObjects = listOf(person, furCoatFalseCat, realDogOnFloor),
+            imageLabels = listOf(RawLabel("Jacket", 0.72f), RawLabel("Pet", 0.50f)),
+            imageWidth = 1000,
+            imageHeight = 1000,
+            timestamp = 1000L
+        )
+
+        assertEquals(listOf("Person", "Dog"), result.obstacles.map { it.label })
+    }
 }

@@ -16,6 +16,7 @@ import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.project.argus.domain.model.BoundingBox2D
 import com.project.argus.domain.model.VisionFrameResult
 import java.io.Closeable
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -133,14 +134,25 @@ class VisionAnalyzer(
                             } else {
                                 objectDetector.detect(mpImage).detections().map { detection ->
                                     val box = detection.boundingBox()
+                                    val domainBox = BoundingBox2D(
+                                        left = box.left,
+                                        top = box.top,
+                                        right = box.right,
+                                        bottom = box.bottom
+                                    )
+                                    val labels = detection.categories().map {
+                                        RawLabel(it.categoryName(), it.score())
+                                    }
+                                    val topName = labels.firstOrNull()?.text?.trim()?.lowercase(Locale.ROOT).orEmpty()
+                                    val appearanceStats = if (topName in APPEARANCE_STATS_CLASSES) {
+                                        BitmapAppearanceExtractor.extractFromBitmap(preparedBitmap, domainBox)
+                                    } else {
+                                        null
+                                    }
                                     RawDetectedObject(
-                                        boundingBox = BoundingBox2D(
-                                            left = box.left,
-                                            top = box.top,
-                                            right = box.right,
-                                            bottom = box.bottom
-                                        ),
-                                        labels = detection.categories().map { RawLabel(it.categoryName(), it.score()) }
+                                        boundingBox = domainBox,
+                                        labels = labels,
+                                        appearanceStats = appearanceStats
                                     )
                                 }
                             }
@@ -213,5 +225,18 @@ class VisionAnalyzer(
             runCatching { objectDetector.close() }
         }
         runCatching { imageLabeler.close() }
+    }
+
+    companion object {
+        private val APPEARANCE_STATS_CLASSES = setOf(
+            "person",
+            "dog",
+            "cat",
+            "bird",
+            "horse",
+            "sheep",
+            "cow",
+            "bear"
+        )
     }
 }
