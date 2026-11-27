@@ -55,6 +55,7 @@ class VisionAnalyzer(
     private val frameIntervalMs = 180L // ~5.5 FPS for optimal battery and performance
     private val isClosed = AtomicBoolean(false)
     private val nativeClosed = AtomicBoolean(false)
+    private val isProcessing = AtomicBoolean(false)
     private val detectorLock = Any()
 
     fun markClosing() {
@@ -76,6 +77,11 @@ class VisionAnalyzer(
 
         val mediaImage = imageProxy.image
         if (mediaImage == null) {
+            imageProxy.close()
+            return
+        }
+
+        if (!isProcessing.compareAndSet(false, true)) {
             imageProxy.close()
             return
         }
@@ -185,6 +191,7 @@ class VisionAnalyzer(
                     // Dropped or failed frame handled gracefully
                 }
                 .addOnCompleteListener {
+                    isProcessing.set(false)
                     imageProxy.close()
                 }
             delegatedToLabeler = true
@@ -192,6 +199,7 @@ class VisionAnalyzer(
             // Frame skipped; outer finally closes imageProxy if not delegated
         } finally {
             if (!delegatedToLabeler) {
+                isProcessing.set(false)
                 imageProxy.close()
             }
         }
