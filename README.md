@@ -3,7 +3,7 @@
 > Умная трость для незрячих и слабовидящих людей с аппаратной индикацией поворотов, локальным виброоткликом на препятствия, односторонней Bluetooth-телеметрией и мобильным ассистентом компьютерного зрения.
 
 [![Arduino](https://img.shields.io/badge/Arduino-Nano-00979D?style=flat&logo=arduino&logoColor=white)](https://www.arduino.cc/)
-[![C++](https://img.shields.io/badge/C++-11%2F17-00599C?style=flat&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
+[![C++](https://img.shields.io/badge/C++-17-00599C?style=flat&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?style=flat&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Android](https://img.shields.io/badge/Android-API%2026%2B-3DDC84?style=flat&logo=android&logoColor=white)](https://developer.android.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](LICENSE)
@@ -25,7 +25,7 @@
 4. **Локальная вибрация на ручке и исходящая телеметрия.**  
    Ультразвуковой датчик `RCWL-9610A` (`HC-SR04`) с таймаутом `pulseIn` `12000 мкс` (около `2 м`; `-1` на свободном пути и защита от ложного `0` при касании `< 1 см`) измеряет дистанцию впереди. При препятствии `<= 50 см` контроллер запускает 5V модуль вибромотора (либо дискретный ключ `SS8050 + 1N4007`) с неблокирующей динамической пульсацией `map(constrain(dist, 5, 50), 5, 50, 40, 400)` на `millis()`. Реализованы стартовая автокалибровка `MPU6050` (20 отсчетов), таймаут шины I2C `Wire.setWireTimeout(3000, true)` и симметричный гистерезис детектора зарядки `A1` (`3` замера по `20 мс` от платы `18650 Battery Shield V3`). Каждые `180 мс` трость отправляет по Bluetooth строку телеметрии.
 5. **Мобильный контур компьютерного зрения и Sensor Fusion.**  
-   Смартфон локально распознает 10 классов препятствий COCO (`MediaPipe EfficientDet-Lite0`) и элементы инфраструктуры (`ML Kit`: лестницы, стены, двери, подлокотники), объединяет их с телеметрией трости по 5-уровневой шкале приоритетов, озвучивает подсказки на русском языке, поддерживает скринридер TalkBack и дублирует срочные угрозы двойной вибрацией смартфона.
+   Смартфон локально (`640x480`, защита от очереди кадров `isProcessing`) распознает 23 курированных навигационных класса препятствий COCO (`MediaPipe EfficientDet-Lite0` + `ObstacleCatalog` с градацией риска `dangerPriority` `1..3` + `TemporalObjectTracker`) и элементы инфраструктуры (`ML Kit`: лестницы с мебельной защитой от ложных срабатываний, стены, дверные проемы), объединяет их с телеметрией трости по 5-уровневой шкале приоритетов, озвучивает подсказки на русском языке (`SpeechCooldownPolicy`), поддерживает TalkBack и дублирует срочные угрозы двойной вибрацией смартфона.
 
 ---
 
@@ -38,8 +38,8 @@
   - Модуль фильтрации наклонов [`firmware/direction_logic/`](firmware/direction_logic/direction_logic.h) покрыт модульными C++ тестами (`5/5 PASS`).
   - Боевой скетч [`firmware/argus_cane/argus_cane.ino`](firmware/argus_cane/argus_cane.ino) работает полностью без `delay()` в `loop()`, включает защиту I2C, зажим сверхблизкого эха `< 1 см -> 1 см` и симметричную фильтрацию пина зарядки `A1`.
 - **Мобильное приложение (Android):**
-  - Чистая архитектура на Kotlin / Jetpack Compose / CameraX / MediaPipe / ML Kit с 5-уровневой иерархией приоритетов, потокобезопасным односторонним Bluetooth-клиентом, локальным демо-режимом, виброоткликом смартфона (`1500 мс` кулдаун), поддержкой TalkBack и удержанием экрана `FLAG_KEEP_SCREEN_ON`.
-  - Покрыто 67 модульными JVM-тестами и инструментальными тестами (подробности в [`android/README.md`](android/README.md)).
+  - Чистая архитектура на Kotlin / Jetpack Compose / CameraX (`640x480`, `isProcessing`) / MediaPipe (`ObstacleCatalog` на 23 класса COCO + `TemporalObjectTracker`) / ML Kit с 5-уровневой иерархией приоритетов, монотонной политикой речи `SpeechCooldownPolicy`, потокобезопасным односторонним Bluetooth-клиентом, локальным демо-режимом, виброоткликом смартфона (`1500 мс` кулдаун), поддержкой TalkBack и удержанием экрана `FLAG_KEEP_SCREEN_ON`.
+  - Покрыто 94 модульными JVM-тестами (12 наборов) и инструментальными тестами (подробности в [`android/README.md`](android/README.md)).
 - **Инфраструктура качества (CI и стандарты):**
   - На каждом Pull Request автоматически выполняются 3 независимые джобы GitHub Actions (Android тесты + `androidTest` + сборка APK, C++ тесты с `-Werror`, Python-контроль стандартов и архитектурных контрактов на `16` юнит-тестах) и авторазметка метаданных PR.
 
@@ -87,7 +87,7 @@
 | [**ADR-001**](docs/adr.md#adr-001-строго-односторонний-bluetooth-classic-spp) | Односторонний Bluetooth SPP (`трость -> телефон`) | `btSerial.stopListening()`, `0` записей в сокет на Android, полная автономность трости и защита `pulseIn()` от прерываний RX |
 | [**ADR-002**](docs/adr.md#adr-002-аппаратный-кмоп-дешифратор-74hc138-с-резисторами-470-ом) | КМОП-дешифратор `74HC138` + резисторы `470 Ом` | Аппаратная взаимоблокировка поворотников `Active LOW`, ток покоя `<= 8 мкА`, рабочий ток LED `~5.7 мА` |
 | [**ADR-003**](docs/adr.md#adr-003-гистерезисный-фильтр-наклона-с-удержанием-250-мс) | Гистерезис `25°/17°` и удержание `250 мс` | Подавление маятникового качания при шаге в чистом C++ модуле `direction_logic` (`5/5` тестов) |
-| [**ADR-004**](docs/adr.md#adr-004-двухконтурное-компьютерное-зрение-и-5-уровневая-иерархия-приоритетов) | Двухконтурное зрение и 5 уровней приоритетов | 10 классов COCO + `HazardClassifier` (ML Kit), единая шкала `0.06/0.12/0.28`, `ru-RU` TTS (`4 с`) и вибро смартфона (`1.5 с`) |
+| [**ADR-004**](docs/adr.md#adr-004-двухконтурное-компьютерное-зрение-и-5-уровневая-иерархия-приоритетов) | Двухконтурное зрение и 5 уровней приоритетов | 23 класса COCO (`ObstacleCatalog`, `dangerPriority` `1..3`) + `TemporalObjectTracker` + `HazardClassifier`, `640x480`, `SpeechCooldownPolicy` и вибро смартфона |
 | [**ADR-005**](docs/adr.md#adr-005-неблокирующая-прошивка-на-millis-автокалибровка-imu-и-защита-периферии) | Кооперативный цикл на `millis()` и защита периферии | `0` `delay()` в `loop()`, таймаут сонара `12000 мкс` (зажим `< 1 см -> 1 см`), `Wire.setWireTimeout`, стартовая автокалибровка IMU и гистерезис `A1` |
 
 ---
@@ -227,7 +227,7 @@ argus/
 
 | Контур проверки | CI Job / Механизм | Объем и критерий прохождения | Команда локального запуска |
 |:---|:---|:---|:---|
-| **Android Unit + androidTest + APK** | `build-and-test` | **67/67** JVM-тестов (9 наборов), компиляция `androidTest`, сборка `app-debug.apk` | `cd android && ./gradlew testDebugUnitTest compileDebugAndroidTestKotlin assembleDebug` |
+| **Android Unit + androidTest + APK** | `build-and-test` | **94/94** JVM-тестов (12 наборов), компиляция `androidTest`, сборка `app-debug.apk` | `cd android && ./gradlew testDebugUnitTest compileDebugAndroidTestKotlin assembleDebug` |
 | **Firmware C++ Direction Logic** | `firmware-tests` | **5/5** модульных C++ тестов без единого предупреждения (`-Wall -Wextra -Werror`) | `g++ -std=c++17 -Wall -Wextra -Werror firmware/direction_logic/test_direction_logic.cpp firmware/direction_logic/direction_logic.cpp -o test_runner && ./test_runner` |
 | **Стандарты и контракты репозитория** | `repo-standards` | **16/16** `unittest` + аудит всех файлов: UTF-8, типографика, односторонний Bluetooth, чистота `domain/` | `python3 -m unittest discover -s scripts -p "test_*.py" -v && python3 scripts/check_repo_standards.py` |
 | **Метаданные и ревью Pull Request** | `pr-metadata` + `CODEOWNERS` | Авторазметка лейблов (`app`, `firmware`, `hardware`, `docs`), автора, вехи `"Финал"` и ревьюеров по путям | Срабатывает автоматически на событиях `pull_request` (`opened`, `synchronize`, `reopened`) |
