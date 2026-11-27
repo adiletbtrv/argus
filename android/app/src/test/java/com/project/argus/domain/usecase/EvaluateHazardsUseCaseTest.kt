@@ -399,4 +399,54 @@ class EvaluateHazardsUseCaseTest {
         val decision = useCase(stairsFrame)
         assertNull("Stairs must be debounced after reset", decision.spokenText)
     }
+
+    @Test
+    fun `alert strategies respect DetectedObstacle dangerPriority field directly`() {
+        // Explicit dangerPriority = 1 overrides label lookup -> downgraded to non-urgent Priority 5
+        val downgradedNearFrame = VisionFrameResult(
+            obstacles = listOf(
+                DetectedObstacle(
+                    id = 0,
+                    label = "chair",
+                    confidence = 0.90f,
+                    boundingBox = BoundingBox2D(250f, 200f, 750f, 800f),
+                    zone = HorizontalZone.CENTER,
+                    estimatedDistanceCategory = DistanceCategory.NEAR,
+                    dangerPriority = 1
+                )
+            )
+        )
+        val downgradedDecision = useCase(downgradedNearFrame)
+        assertFalse(downgradedDecision.isUrgent)
+        assertEquals(5, downgradedDecision.priority)
+        assertEquals("Прямо стул, обойдите слева", downgradedDecision.spokenText)
+
+        // Explicit dangerPriority = 3 takes Priority 3 precedence over default dangerPriority = 2
+        val elevatedNearFrame = VisionFrameResult(
+            obstacles = listOf(
+                DetectedObstacle(
+                    id = 0,
+                    label = "chair",
+                    confidence = 0.95f,
+                    boundingBox = BoundingBox2D(250f, 200f, 750f, 800f),
+                    zone = HorizontalZone.CENTER,
+                    estimatedDistanceCategory = DistanceCategory.NEAR,
+                    dangerPriority = 2
+                ),
+                DetectedObstacle(
+                    id = 1,
+                    label = "backpack",
+                    confidence = 0.80f,
+                    boundingBox = BoundingBox2D(260f, 200f, 740f, 800f),
+                    zone = HorizontalZone.CENTER,
+                    estimatedDistanceCategory = DistanceCategory.NEAR,
+                    dangerPriority = 3
+                )
+            )
+        )
+        val elevatedDecision = useCase(elevatedNearFrame)
+        assertTrue(elevatedDecision.isUrgent)
+        assertEquals(3, elevatedDecision.priority)
+        assertEquals("Вплотную, рюкзак!", elevatedDecision.spokenText)
+    }
 }

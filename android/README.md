@@ -45,15 +45,15 @@ Android-приложение системы **Argus** в реальном вре
 
 ## Статус проекта
 
-Текущая стадия: готовность к финальной защите (**версия 1.0, versionCode 1**, 94 модульных JVM-теста в 12 наборах + инструментальные тесты).
+Текущая стадия: готовность к финальной защите (**версия 1.0, versionCode 1**, 123 модульных JVM-теста в 16 наборах + инструментальные тесты).
 
 | Функция | Реализация | Состояние |
 |:---|:---|:---:|
 | **Видеопоток с камеры и защита памяти** | CameraX ImageAnalysis (`YUV_420_888`, `ResolutionSelector` `640x480`, ~5.5 FPS), защита от очереди кадров `isProcessing: AtomicBoolean`, безопасное закрытие `VisionAnalyzer` / `Bitmap` / `MPImage` / `ImageProxy` | Реализовано |
-| **Детекция объектов (23 класса COCO) и трекинг** | MediaPipe Tasks Vision (`EfficientDet-Lite0` int8, порог `0.45`, `maxResults = 7`) + `ObstacleCatalog` (`dangerPriority` `1..3`) + `TemporalObjectTracker` | Реализовано, покрыто тестами |
+| **Детекция объектов (23 класса COCO), фильтры и трекинг** | MediaPipe Tasks Vision (`EfficientDet-Lite0` int8, порог `0.45`, `maxResults = 7`) + `ObstacleCatalog` (`dangerPriority` `1..3`) + `BitmapAppearanceExtractor` + `PersonShadowFilter` + `ClothingAnimalDisambiguator` + `TemporalObjectTracker` | Реализовано, покрыто тестами |
 | **Классификация окружения (сцены)** | Google ML Kit Image Labeling (порог `0.40`) + `HazardClassifier` (лестницы, стены, двери + подавление ложных ступеней на мебели) | Реализовано, покрыто тестами |
 | **Приоритизация угроз и Sensor Fusion** | Единая 5-уровневая иерархия (`EvaluateHazardsUseCase` + `EvaluateSensorFusionUseCase` + `MainViewModel`) с понижением риска для `dangerPriority == 1` | Реализовано, покрыто тестами |
-| **Озвучивание подсказок** | Android Text-to-Speech (`Locale.forLanguageTag("ru-RU")` с фолбэком) + потокобезопасная `SpeechCooldownPolicy` на `SystemClock::elapsedRealtime` (`4 с` / `2.5 с` / `1.5 с`) | Реализовано, покрыто тестами |
+| **Озвучивание подсказок** | Android Text-to-Speech (`Locale.forLanguageTag("ru-RU")` с фолбэком) + потокобезопасная `SpeechCooldownPolicy` на `SystemClock::elapsedRealtime` (`4 с` / `2.5 с` / поключевые `1.5 с` в `recentUrgentPhrases` против `A->B->A` пинг-понга) | Реализовано, покрыто тестами |
 | **Прием телеметрии с трости по Bluetooth SPP** | Односторонний прием от `HC-05`/`HC-06`/`ARGUS` (`AtomicReference` + `connectionGeneration`, проверка `BLUETOOTH_SCAN`, демо-режим) | Реализовано, покрыто тестами |
 | **Тактильный виброотклик смартфона** | `HapticFeedbackService` + `HapticCooldownGate` (`1500 мс` на `SystemClock::elapsedRealtime`) + двойной импульс `AndroidHapticFeedbackService` на срочных угрозах | Реализовано, покрыто тестами |
 | **Доступность TalkBack и удержание экрана** | Семантика Compose (`semantics`, полные единицы в сантиметрах, `LiveRegionMode.Polite`, `heading()`, кнопки `>= 48.dp`, заголовки без эмодзи, скрытие декоративного `Canvas`) и `FLAG_KEEP_SCREEN_ON` | Реализовано, покрыто тестами |
@@ -67,6 +67,7 @@ Android-приложение системы **Argus** в реальном вре
   - `dangerPriority = 3` (подвижные/крупные): `person` ("человек"), `car` ("машина"), `bus` ("автобус"), `truck` ("грузовик"), `motorcycle` ("мотоцикл"), `bicycle` ("велосипед");
   - `dangerPriority = 2` (физические преграды, животные, мебель, уличные столбики): `dog` ("собака"), `cat` ("кошка"), `chair` ("стул"), `couch` ("диван"), `bench` ("скамейка"), `dining table` ("стол"), `bed` ("кровать"), `potted plant` ("растение"), `suitcase` ("чемодан"), `backpack` ("рюкзак"), `fire hydrant` ("гидрант"), `stop sign` ("дорожный знак"), `traffic light` ("светофор"), `parking meter` ("столбик");
   - `dangerPriority = 1` (низкий риск - никогда не вызывают срочную тревогу и вибрацию смартфона): `handbag` ("сумка"), `umbrella` ("зонт"), `sports ball` ("мяч", `isCompact = true`).
+- **Подавление ложных теней и одежды (`BitmapAppearanceExtractor`, `PersonShadowFilter`, `ClothingAnimalDisambiguator`)**: для кандидатов `person` и животных вычисляются легкие 16x16 статистики яркости/градиента/цвета; фильтры отсекают падающие монохромные тени и ложных животных на меховой/шерстяной одежде, гарантированно сохраняя уверенных пешеходов (`>= 0.78`), людей в темной одежде с нормальным контрастом, реальных животных (`>= 0.78`) и собак вне торса человека.
 - **Временная стабилизация детекций (`TemporalObjectTracker`)**: уверенные объекты (`confidence >= 0.55`) и любые близкие (`NEAR`) преграды подтверждаются мгновенно на 1-м кадре, а слабые детекции (`0.45..0.55`, не `NEAR`) требуют подтверждения на 2 кадрах в окне `<= 750 мс` по совпадению класса и IoU / центра рамки.
 - **Разделение на пространственные зоны и адаптивная шкала площади**: классификация по секторам (`LEFT`, `CENTER`, `RIGHT`) и трем категориям дистанции (`NEAR >= 28%`, `MEDIUM 12%-28%`, `FAR 6%-12%`, `< 6%` игнор для стандартных объектов; `0.14 / 0.05 / 0.02` для компактного профиля `sports ball`).
 - **Распознавание опасных элементов инфраструктуры**: классификатор лестниц (подтверждение на 2 кадрах подряд в окне `< 750 мс` с подавлением ложных ступеней при мебельном контексте `chair`/`couch`/`sofa`/`furniture`/`armrest` при `stairs < 0.72`), глухих стен и дверных проемов (`HazardClassifier`).
@@ -157,7 +158,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 | **4** | **`DoorAhead`** | `"Впереди дверной проем"` | **Нет** (`QUEUE_ADD`, без вибро смартфона) |
 | **5** | **Препятствие `MEDIUM` по центру (и `NEAR` с `dangerPriority == 1`) с анализом коридора** | `"Прямо <объект>, обойдите слева"` / `"Прямо <объект>, обойдите справа"` / `"Впереди <объект>"` | **Нет** (`QUEUE_ADD`, без вибро смартфона) |
 
-> **Перевод объектов и подавление повторов:** 23 навигационных класса COCO переводятся на русский язык через `ObstacleTranslator` и `ObstacleCatalog` (`person` -> `"человек"`, `car` -> `"машина"`, `chair` -> `"стул"`, `dining table` -> `"стол"`, `potted plant` -> `"растение"`, `parking meter` -> `"столбик"` и др.). Очередь и антиспам озвучки в `AndroidVoiceAlertService` управляются доменной политикой `SpeechCooldownPolicy` на монотонных часах `SystemClock::elapsedRealtime` (`sameTextCooldownMs = 4000L`, `globalCooldownMs = 2500L`, `urgentSameTextCooldownMs = 1500L`), а частота срочной вибрации смартфона ограничена окном 1.5 секунды (`HapticCooldownGate(cooldownMs = 1500L)`).
+> **Перевод объектов и подавление повторов:** 23 навигационных класса COCO переводятся на русский язык через `ObstacleTranslator` и `ObstacleCatalog` (`person` -> `"человек"`, `car` -> `"машина"`, `chair` -> `"стул"`, `dining table` -> `"стол"`, `potted plant` -> `"растение"`, `parking meter` -> `"столбик"` и др.). Очередь и антиспам озвучки в `AndroidVoiceAlertService` управляются доменной политикой `SpeechCooldownPolicy` на монотонных часах `SystemClock::elapsedRealtime` (`sameTextCooldownMs = 4000L`, `globalCooldownMs = 2500L`, `urgentSameTextCooldownMs = 1500L` с поключевой историей `recentUrgentPhrases` против `A->B->A` пинг-понга), а частота срочной вибрации смартфона ограничена окном 1.5 секунды (`HapticCooldownGate(cooldownMs = 1500L)`).
 
 ---
 
@@ -189,6 +190,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
                    │   VisionResultProcessor   │
                    ├───────────────────────────┤
                    │  • ObstacleCatalog (23)   │
+                   │  • Shadow/Clothing Filters│
                    │  • TemporalObjectTracker  │
                    │  • SpatialClassifier      │
                    │  • HazardClassifier       │
@@ -239,7 +241,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 Проект построен по принципам **Clean Architecture** и **UDF (Unidirectional Data Flow)** (подробные обоснования см. в [`docs/adr.md`](../docs/adr.md)):
 - **UI-слой** подписывается на неизменяемый поток `StateFlow<MainUiState>`, управляет `FLAG_KEEP_SCREEN_ON` и семантикой доступности.
 - **Domain-слой** не содержит импортов `android.*` и `androidx.*` (контролируется в CI скриптом `check_repo_standards.py`) и оперирует чистыми контрактами (`ObstacleCatalog`, `SpeechOutput`, `SpeechCooldownPolicy`, `HapticFeedbackService`, `HapticCooldownGate`, `CaneBluetoothClient`, `AlertStrategy`).
-- **Data-слой** инкапсулирует MediaPipe / ML Kit, `TemporalObjectTracker`, потокобезопасный односторонний клиент Bluetooth SPP, системный `TextToSpeech` и `Vibrator` / `VibratorManager`.
+- **Data-слой** инкапсулирует MediaPipe / ML Kit, `BitmapAppearanceExtractor`, `PersonShadowFilter`, `ClothingAnimalDisambiguator`, `TemporalObjectTracker`, потокобезопасный односторонний клиент Bluetooth SPP, системный `TextToSpeech` и `Vibrator` / `VibratorManager`.
 
 ### Структура каталогов
 
@@ -259,8 +261,9 @@ android/
 │       │   │   │   ├── bluetooth/         # BluetoothCaneClient (односторонний SPP, поколения сокета, демо)
 │       │   │   │   ├── haptic/            # AndroidHapticFeedbackService (VibratorManager / VibrationEffect)
 │       │   │   │   ├── tts/               # AndroidVoiceAlertService (ru-RU TTS + SpeechCooldownPolicy)
-│       │   │   │   └── vision/            # VisionAnalyzer, VisionResultProcessor, TemporalObjectTracker,
-│       │   │   │                          # HazardClassifier, SpatialClassifier, LabelFormatter
+│       │   │   │   └── vision/            # VisionAnalyzer, VisionResultProcessor, BitmapAppearanceExtractor,
+│       │   │   │                          # PersonShadowFilter, ClothingAnimalDisambiguator,
+│       │   │   │                          # TemporalObjectTracker, HazardClassifier, SpatialClassifier, LabelFormatter
 │       │   │   ├── domain/
 │       │   │   │   ├── bluetooth/         # CaneBluetoothClient, BluetoothConnectionStatus
 │       │   │   │   ├── haptic/            # HapticFeedbackService, NoOpHapticFeedbackService, HapticCooldownGate
@@ -275,7 +278,7 @@ android/
 │       │   ├── keepRules/
 │       │   │   └── rules.keep             # R8/ProGuard keep-правила для MediaPipe и protobuf-lite
 │       │   └── res/                       # Векторные иконки, строковые ресурсы, цвета, темы
-│       ├── test/                          # 12 наборов модульных JVM-тестов (94 теста, JUnit 4 + Coroutines Test)
+│       ├── test/                          # 16 наборов модульных JVM-тестов (123 теста, JUnit 4 + Coroutines Test)
 │       └── androidTest/                   # Инструментальные тесты Android (VisionIntegrationTest)
 ├── gradle/
 │   ├── libs.versions.toml                 # Version Catalog: централизованные зависимости
@@ -340,20 +343,24 @@ cd android
 ./gradlew connectedDebugAndroidTest
 ```
 
-### Состав тестового набора (94 модульных JVM-теста в 12 наборах + инструментальные)
+### Состав тестового набора (123 модульных JVM-теста в 16 наборах + инструментальные)
 
 | Тестовый класс | Тип | Кол-во | Что верифицируется |
 |:---|:---:|:---:|:---|
-| **`EvaluateHazardsUseCaseTest`** | Unit (JVM) | 16 | Иерархия приоритетов оповещений, фильтр лестниц (2 кадра подряд в 750 мс), понижение `dangerPriority == 1` до несрочного уровня 5, приоритет `person` выше `chair`. |
-| **`VisionResultProcessorTest`** | Unit (JVM) | 16 | Курированный список 23 классов COCO, пороги `0.06/0.12/0.28` и компактные `0.02/0.05/0.14`, сортировка `(dangerPriority desc, distance asc, confidence desc)`, мебельное подавление лестниц и `TemporalObjectTracker`. |
+| **`VisionResultProcessorTest`** | Unit (JVM) | 18 | Курированный список 23 классов COCO, пороги `0.06/0.12/0.28` и `0.02/0.05/0.14`, сортировка угроз, мебельное подавление лестниц, `TemporalObjectTracker`, фильтрация теней и ложных животных на одежде. |
+| **`EvaluateHazardsUseCaseTest`** | Unit (JVM) | 17 | Иерархия приоритетов, фильтр лестниц (2 кадра подряд в 750 мс), прямое чтение `DetectedObstacle.dangerPriority`, понижение `dangerPriority == 1` до несрочного уровня 5, приоритет `person` выше `chair`. |
 | **`MainViewModelTest`** | Unit (JVM) | 15 | Разрешения камеры и Bluetooth, арбитраж 5 уровней приоритетов, отсутствие `vibrateUrgent()` на несрочных и `dangerPriority == 1` объектах, обновление `MainUiState`. |
+| **`SpeechCooldownPolicyTest`** | Unit (JVM) | 11 | Потокобезопасные кулдауны TTS (`4000 мс` повтор, `2500 мс` общий, поключевые `1500 мс` в `recentUrgentPhrases` против `A->B->A` пинг-понга), откат часов и `reset()`. |
 | **`ObstacleCatalogTest`** | Unit (JVM) | 8 | Точный состав 23 навигационных классов COCO, отсечение бытового шума и `"door"`, градация `dangerPriority` `1..3`, профиль `isCompact` и русские переводы с алиасами. |
-| **`SpeechCooldownPolicyTest`** | Unit (JVM) | 8 | Потокобезопасные кулдауны TTS (`4000 мс` повтор, `2500 мс` общий, `1500 мс` дубли `urgent`), мгновенный прорыв новой срочной угрозы, откат часов и `reset()`. |
 | **`TemporalObjectTrackerTest`** | Unit (JVM) | 8 | Мгновенный пропуск при `>= 0.55` или `NEAR`, подтверждение `0.45..0.55` на 2 кадрах в `<= 750 мс`, откат часов, ограничение памяти треков и `reset()`. |
+| **`PersonShadowFilterTest`** | Unit (JVM) | 7 | Подавление прикрепленных и плоских темных монохромных теней при гарантированном сохранении уверенных пешеходов (`>= 0.78`) и людей в темной одежде с нормальным контрастом. |
+| **`ClothingAnimalDisambiguatorTest`** | Unit (JVM) | 7 | Подавление ложных животных на меховой/шерстяной одежде и однородной ткани при гарантированном сохранении уверенных животных (`>= 0.78`), подтвержденного контекста и собак вне торса (включая человека в куртке). |
 | **`EvaluateSensorFusionUseCaseTest`** | Unit (JVM) | 6 | Приоритет 1 сонара (`< 35 см`), приоритет 2 бокового Sensor Fusion (`LEFT`/`RIGHT`), отсечение устаревшей телеметрии (`>= 1000 мс`). |
+| **`BitmapAppearanceExtractorTest`** | Unit (JVM) | 5 | Pure-JVM 16x16 выборка яркости, дисперсии, градиента, цветности, отношения яркости к рамке и отсечение невалидных/слишком малых боксов. |
 | **`CaneTelemetryTest`** | Unit (JVM) | 5 | Парсинг протокола `DIST:<см>,DIR:<курс>`, порог `isCriticalDistance` (`1..34 см`), обработка свободного пути `DIST:-1` (`isCriticalDistance == false`). |
 | **`CaneDistanceDisplayTest`** | Unit (JVM) | 5 | Граничные состояния карточки дистанции (`null`, `-1`, `0`, `1`, `34`, `35`, `50`, `51`, `120`), метка `"> 200 СМ"` и полные строки `contentDescription` для TalkBack. |
 | **`HapticCooldownGateTest`** | Unit (JVM) | 4 | Первое срабатывание (включая `t = 0`), подавление повторов внутри окна `1500 мс`, восстановление при откате часов и `NoOpHapticFeedbackService`. |
+| **`VisionBenchmarkMetricsTest`** | Unit (JVM) | 4 | Количественный бенчмарк скорости (`< 15 мс` извлечение, `< 10 мс` постобработка) и precision/recall/F1 симуляции для фильтров теней и одежды. |
 | **`BluetoothCaneClientTest`** | Unit (JVM) | 2 | Регистронезависимый отбор сопряженных устройств (`HC-05`, `HC-06`, `ARGUS`) и отсечение посторонней гарнитуры. |
 | **`ExampleUnitTest`** | Unit (JVM) | 1 | Базовая проверка окружения JUnit 4. |
 | **`VisionIntegrationTest`** | Instrumented | 4 | Инициализация `AndroidVoiceAlertService` и `VisionAnalyzer` с реальным `Context`, сквозная связка COCO + `DoorAhead`, компактный `sports ball` и подавление ложных ступеней на мебели. |

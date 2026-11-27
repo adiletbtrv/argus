@@ -3,7 +3,6 @@ package com.project.argus.domain.usecase
 import com.project.argus.domain.model.DetectedObstacle
 import com.project.argus.domain.model.DistanceCategory
 import com.project.argus.domain.model.HorizontalZone
-import com.project.argus.domain.model.ObstacleCatalog
 import com.project.argus.domain.model.ObstacleTranslator
 import com.project.argus.domain.model.SpatialHazard
 import com.project.argus.domain.model.VisionFrameResult
@@ -76,10 +75,10 @@ internal class NearCenterObstacleAlertStrategy : AlertStrategy {
             .filter {
                 it.zone == HorizontalZone.CENTER &&
                     it.estimatedDistanceCategory == DistanceCategory.NEAR &&
-                    ObstacleCatalog.dangerPriority(it.label) >= MIN_URGENT_DANGER_PRIORITY
+                    it.dangerPriority >= MIN_URGENT_DANGER_PRIORITY
             }
             .maxWithOrNull(
-                compareBy<DetectedObstacle> { ObstacleCatalog.dangerPriority(it.label) }
+                compareBy<DetectedObstacle> { it.dangerPriority }
                     .thenBy { it.confidence }
             )
             ?: return null
@@ -131,10 +130,10 @@ internal class CenterCorridorAlertStrategy : AlertStrategy {
                 obstacle.zone == HorizontalZone.CENTER &&
                     (obstacle.estimatedDistanceCategory == DistanceCategory.MEDIUM ||
                         (obstacle.estimatedDistanceCategory == DistanceCategory.NEAR &&
-                            ObstacleCatalog.dangerPriority(obstacle.label) == LOW_RISK_DANGER_PRIORITY))
+                            obstacle.dangerPriority == LOW_RISK_DANGER_PRIORITY))
             }
             .maxWithOrNull(
-                compareBy<DetectedObstacle> { ObstacleCatalog.dangerPriority(it.label) }
+                compareBy<DetectedObstacle> { it.dangerPriority }
                     .thenByDescending { it.estimatedDistanceCategory.ordinal }
                     .thenBy { it.confidence }
             )

@@ -180,4 +180,68 @@ class SpeechCooldownPolicyTest {
         assertTrue(policy.shouldSpeak("Впереди стул", urgent = false))
         assertTrue(policy.shouldSpeak("Осторожно, впереди лестница!", urgent = true))
     }
+
+    @Test
+    fun shouldSpeak_alternatingUrgentThreats_preventsPingPongWithinCooldownWindow() {
+        var nowMs = 1000L
+        val policy = SpeechCooldownPolicy(urgentSameTextCooldownMs = 1500L, clock = { nowMs })
+
+        // Threat A breaks through
+        assertTrue(policy.shouldSpeak("Осторожно, впереди лестница!", urgent = true))
+
+        // Distinct threat B breaks through immediately
+        nowMs = 1200L
+        assertTrue(policy.shouldSpeak("Внимание, стена прямо по курсу!", urgent = true, isCurrentlySpeaking = true))
+
+        // Threat A returning inside its 1500 ms per-key cooldown is suppressed (no A->B->A ping-pong)
+        nowMs = 2000L
+        assertFalse(policy.shouldSpeak("Осторожно, впереди лестница!", urgent = true, isCurrentlySpeaking = false))
+
+        // Still suppressed at 2499 ms (1499 ms since A at 1000 ms)
+        nowMs = 2499L
+        assertFalse(policy.shouldSpeak("Осторожно, впереди лестница!", urgent = true, isCurrentlySpeaking = false))
+
+        // Allowed again once 1500 ms has elapsed since A's last utterance
+        nowMs = 2500L
+        assertTrue(policy.shouldSpeak("Осторожно, впереди лестница!", urgent = true, isCurrentlySpeaking = false))
+    }
+
+    @Test
+    fun reset_clearsPerKeyUrgentHistoryAfterAlternatingThreats() {
+        var nowMs = 1000L
+        val policy = SpeechCooldownPolicy(urgentSameTextCooldownMs = 1500L, clock = { nowMs })
+
+        assertTrue(policy.shouldSpeak("Осторожно, впереди лестница!", urgent = true))
+        nowMs = 1100L
+        assertTrue(policy.shouldSpeak("Внимание, стена прямо по курсу!", urgent = true))
+
+        nowMs = 1300L
+        assertFalse(policy.shouldSpeak("Осторожно, впереди лестница!", urgent = true))
+
+        policy.reset()
+
+        assertTrue(policy.shouldSpeak("Осторожно, впереди лестница!", urgent = true))
+    }
+
+    @Test
+    fun shouldSpeak_whenClockRollsBackwards_reanchorsPerKeyUrgentHistory() {
+        var nowMs = 50_000L
+        val policy = SpeechCooldownPolicy(urgentSameTextCooldownMs = 1500L, clock = { nowMs })
+
+        assertTrue(policy.shouldSpeak("Осторожно, впереди лестница!", urgent = true))
+        nowMs = 50_200L
+        assertTrue(policy.shouldSpeak("Внимание, стена прямо по курсу!", urgent = true))
+
+        // Roll clock backwards to 10_000 ms
+        nowMs = 10_000L
+        assertFalse(policy.shouldSpeak("Осторожно, впереди лестница!", urgent = true))
+
+        // Still suppressed inside re-anchored 1500 ms window
+        nowMs = 11_499L
+        assertFalse(policy.shouldSpeak("Осторожно, впереди лестница!", urgent = true))
+
+        // Recovers cleanly at 10_000 + 1500 = 11_500 instead of remaining locked until 51_500
+        nowMs = 11_500L
+        assertTrue(policy.shouldSpeak("Осторожно, впереди лестница!", urgent = true))
+    }
 }

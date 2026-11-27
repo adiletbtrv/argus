@@ -12,14 +12,18 @@ data class BoundingBox2D(
     fun centerY(): Float = (top + bottom) / 2f
     fun area(): Float = width() * height()
 
-    fun iou(other: BoundingBox2D): Float {
+    fun intersectionArea(other: BoundingBox2D): Float {
         val interLeft = maxOf(left, other.left)
         val interTop = maxOf(top, other.top)
         val interRight = minOf(right, other.right)
         val interBottom = minOf(bottom, other.bottom)
         val interWidth = (interRight - interLeft).coerceAtLeast(0f)
         val interHeight = (interBottom - interTop).coerceAtLeast(0f)
-        val interArea = interWidth * interHeight
+        return interWidth * interHeight
+    }
+
+    fun iou(other: BoundingBox2D): Float {
+        val interArea = intersectionArea(other)
         if (interArea <= 0f) return 0f
         val unionArea = area() + other.area() - interArea
         return if (unionArea > 0f) interArea / unionArea else 0f
