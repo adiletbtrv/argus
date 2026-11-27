@@ -4,7 +4,8 @@ import java.util.Locale
 
 /**
  * Pure-Kotlin thread-safe speech cooldown policy preventing repetitive voice spam
- * while guaranteeing that every new urgent threat breaks through immediately.
+ * and A->B->A urgent ping-pong interruptions while guaranteeing that every new urgent
+ * threat breaks through immediately.
  */
 class SpeechCooldownPolicy(
     private val sameTextCooldownMs: Long = DEFAULT_SAME_TEXT_COOLDOWN_MS,
@@ -18,11 +19,8 @@ class SpeechCooldownPolicy(
     private var lastSpokenTimeMs = 0L
     private var lastSpokenKey = ""
 
-    private var hasUrgent = false
-    private var lastUrgentTimeMs = 0L
-    private var lastUrgentKey = ""
-
     private val recentPhrases = LinkedHashMap<String, Long>(MAX_PHRASE_HISTORY, 0.75f, true)
+    private val recentUrgentPhrases = LinkedHashMap<String, Long>(MAX_PHRASE_HISTORY, 0.75f, true)
 
     fun shouldSpeak(
         text: String,
@@ -36,18 +34,18 @@ class SpeechCooldownPolicy(
         reanchorOnClockRollbackLocked(now)
 
         if (urgent) {
-            if (hasUrgent && key == lastUrgentKey) {
-                if (now - lastUrgentTimeMs < urgentSameTextCooldownMs || isCurrentlySpeaking) {
-                    return false
-                }
+            val lastUrgentTime = recentUrgentPhrases[key]
+            if (lastUrgentTime != null && now - lastUrgentTime < urgentSameTextCooldownMs) {
+                return false
             }
-            hasUrgent = true
-            lastUrgentTimeMs = now
-            lastUrgentKey = key
+            if (isCurrentlySpeaking && hasSpoken && key == lastSpokenKey) {
+                return false
+            }
             hasSpoken = true
             lastSpokenTimeMs = now
             lastSpokenKey = key
-            recordPhraseLocked(key, now)
+            recordPhraseLocked(recentPhrases, key, now)
+            recordPhraseLocked(recentUrgentPhrases, key, now)
             return true
         }
 
@@ -67,7 +65,7 @@ class SpeechCooldownPolicy(
         hasSpoken = true
         lastSpokenTimeMs = now
         lastSpokenKey = key
-        recordPhraseLocked(key, now)
+        recordPhraseLocked(recentPhrases, key, now)
         return true
     }
 
@@ -75,32 +73,32 @@ class SpeechCooldownPolicy(
         hasSpoken = false
         lastSpokenTimeMs = 0L
         lastSpokenKey = ""
-        hasUrgent = false
-        lastUrgentTimeMs = 0L
-        lastUrgentKey = ""
         recentPhrases.clear()
+        recentUrgentPhrases.clear()
     }
 
     private fun reanchorOnClockRollbackLocked(now: Long) {
         if (hasSpoken && now < lastSpokenTimeMs) {
             lastSpokenTimeMs = now
         }
-        if (hasUrgent && now < lastUrgentTimeMs) {
-            lastUrgentTimeMs = now
-        }
-        for (entry in recentPhrases.entries) {
+        reanchorMapLocked(recentPhrases, now)
+        reanchorMapLocked(recentUrgentPhrases, now)
+    }
+
+    private fun reanchorMapLocked(map: LinkedHashMap<String, Long>, now: Long) {
+        for (entry in map.entries) {
             if (now < entry.value) {
                 entry.setValue(now)
             }
         }
     }
 
-    private fun recordPhraseLocked(key: String, now: Long) {
-        recentPhrases[key] = now
-        if (recentPhrases.size > MAX_PHRASE_HISTORY) {
-            val oldestKey = recentPhrases.entries.firstOrNull()?.key
+    private fun recordPhraseLocked(map: LinkedHashMap<String, Long>, key: String, now: Long) {
+        map[key] = now
+        if (map.size > MAX_PHRASE_HISTORY) {
+            val oldestKey = map.entries.firstOrNull()?.key
             if (oldestKey != null) {
-                recentPhrases.remove(oldestKey)
+                map.remove(oldestKey)
             }
         }
     }
