@@ -390,16 +390,26 @@ class MainViewModelTest {
     }
 
     @Test
-    fun `armrest hazard speaks non urgently without triggering haptic feedback`() = runTest {
+    fun `near center low risk obstacle speaks non urgently without triggering haptic feedback`() = runTest {
         viewModel.onFrameAnalyzed(
             VisionFrameResult(
-                spatialHazards = listOf(SpatialHazard.ArmrestDetected(confidence = 0.85f, zone = HorizontalZone.LEFT)),
+                obstacles = listOf(
+                    DetectedObstacle(
+                        id = 0,
+                        label = "sports ball",
+                        confidence = 0.88f,
+                        boundingBox = BoundingBox2D(300f, 250f, 700f, 650f),
+                        zone = HorizontalZone.CENTER,
+                        estimatedDistanceCategory = DistanceCategory.NEAR
+                    )
+                ),
                 frameWidth = 1000,
                 frameHeight = 1000
             )
         )
 
         assertEquals(1, fakeSpeechOutput.spokenMessages.size)
+        assertEquals("Прямо мяч, обойдите слева", fakeSpeechOutput.spokenMessages[0].first)
         assertFalse(fakeSpeechOutput.spokenMessages[0].second)
         assertEquals(0, fakeHapticFeedbackService.urgentVibrationCount)
     }

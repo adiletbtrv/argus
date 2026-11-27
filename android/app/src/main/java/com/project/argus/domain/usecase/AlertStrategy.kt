@@ -1,7 +1,9 @@
 package com.project.argus.domain.usecase
 
+import com.project.argus.domain.model.DetectedObstacle
 import com.project.argus.domain.model.DistanceCategory
 import com.project.argus.domain.model.HorizontalZone
+import com.project.argus.domain.model.ObstacleCatalog
 import com.project.argus.domain.model.ObstacleTranslator
 import com.project.argus.domain.model.SpatialHazard
 import com.project.argus.domain.model.VisionFrameResult
@@ -64,13 +66,24 @@ internal class WallProximityAlertStrategy : AlertStrategy {
     }
 }
 
-// Priority 3: Urgent near obstacle directly in the center path (area >= 0.28).
+// Priority 3: Urgent near obstacle directly in the center path (only for dangerPriority >= 2).
 internal class NearCenterObstacleAlertStrategy : AlertStrategy {
     override fun evaluate(
         validatedHazards: List<SpatialHazard>,
         frame: VisionFrameResult
     ): AlertDecision? {
-        val nearObstacle = findCenterObstacle(frame, DistanceCategory.NEAR) ?: return null
+        val nearObstacle = frame.obstacles
+            .filter {
+                it.zone == HorizontalZone.CENTER &&
+                    it.estimatedDistanceCategory == DistanceCategory.NEAR &&
+                    ObstacleCatalog.dangerPriority(it.label) >= MIN_URGENT_DANGER_PRIORITY
+            }
+            .maxWithOrNull(
+                compareBy<DetectedObstacle> { ObstacleCatalog.dangerPriority(it.label) }
+                    .thenBy { it.confidence }
+            )
+            ?: return null
+
         val label = ObstacleTranslator.translate(nearObstacle.label)
         return AlertDecision(
             spokenText = "Вплотную, $label!",
@@ -82,32 +95,7 @@ internal class NearCenterObstacleAlertStrategy : AlertStrategy {
 
     companion object {
         const val PRIORITY_NEAR_CENTER = 3
-    }
-}
-
-// Priority 4: Armrest directional guidance with zone-aware phrasing.
-internal class ArmrestAlertStrategy : AlertStrategy {
-    override fun evaluate(
-        validatedHazards: List<SpatialHazard>,
-        frame: VisionFrameResult
-    ): AlertDecision? {
-        val armrest = validatedHazards.filterIsInstance<SpatialHazard.ArmrestDetected>().firstOrNull()
-            ?: return null
-        val side = when (armrest.zone) {
-            HorizontalZone.LEFT -> "слева"
-            HorizontalZone.RIGHT -> "справа"
-            HorizontalZone.CENTER -> "впереди"
-        }
-        return AlertDecision(
-            spokenText = "Подлокотник $side",
-            isUrgent = false,
-            validatedHazards = validatedHazards,
-            priority = PRIORITY_ARMREST
-        )
-    }
-
-    companion object {
-        const val PRIORITY_ARMREST = 4
+        private const val MIN_URGENT_DANGER_PRIORITY = 2
     }
 }
 
@@ -132,14 +120,27 @@ internal class DoorAheadAlertStrategy : AlertStrategy {
     }
 }
 
-// Priority 5: Medium-distance center obstacles (0.12 <= area < 0.28) with corridor bypass hints.
+// Priority 5: Medium-distance center obstacles (plus NEAR low-risk dangerPriority == 1 items) with corridor bypass hints.
 internal class CenterCorridorAlertStrategy : AlertStrategy {
     override fun evaluate(
         validatedHazards: List<SpatialHazard>,
         frame: VisionFrameResult
     ): AlertDecision? {
-        val mediumObstacle = findCenterObstacle(frame, DistanceCategory.MEDIUM) ?: return null
-        val label = ObstacleTranslator.translate(mediumObstacle.label)
+        val corridorObstacle = frame.obstacles
+            .filter { obstacle ->
+                obstacle.zone == HorizontalZone.CENTER &&
+                    (obstacle.estimatedDistanceCategory == DistanceCategory.MEDIUM ||
+                        (obstacle.estimatedDistanceCategory == DistanceCategory.NEAR &&
+                            ObstacleCatalog.dangerPriority(obstacle.label) == LOW_RISK_DANGER_PRIORITY))
+            }
+            .maxWithOrNull(
+                compareBy<DetectedObstacle> { ObstacleCatalog.dangerPriority(it.label) }
+                    .thenByDescending { it.estimatedDistanceCategory.ordinal }
+                    .thenBy { it.confidence }
+            )
+            ?: return null
+
+        val label = ObstacleTranslator.translate(corridorObstacle.label)
 
         val leftBlocked = isSideBlocked(frame, HorizontalZone.LEFT)
         val rightBlocked = isSideBlocked(frame, HorizontalZone.RIGHT)
@@ -168,12 +169,6 @@ internal class CenterCorridorAlertStrategy : AlertStrategy {
 
     companion object {
         const val PRIORITY_CENTER_CORRIDOR = 5
+        private const val LOW_RISK_DANGER_PRIORITY = 1
     }
-}
-
-private fun findCenterObstacle(
-    frame: VisionFrameResult,
-    category: DistanceCategory
-) = frame.obstacles.firstOrNull {
-    it.zone == HorizontalZone.CENTER && it.estimatedDistanceCategory == category
 }

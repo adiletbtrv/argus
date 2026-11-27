@@ -27,4 +27,6 @@ interface VisionProcessor {
         imageHeight: Int,
         timestamp: Long = System.currentTimeMillis()
     ): VisionFrameResult
+
+    fun reset() {}
 }

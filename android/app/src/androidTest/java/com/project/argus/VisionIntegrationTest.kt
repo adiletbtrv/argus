@@ -13,6 +13,7 @@ import com.project.argus.domain.model.HorizontalZone
 import com.project.argus.domain.model.SpatialHazard
 import com.project.argus.domain.usecase.EvaluateHazardsUseCase
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -76,5 +77,38 @@ class VisionIntegrationTest {
         assertNotNull(decision)
         // DoorAhead (Priority 4) has priority over medium center obstacle (Priority 5)
         assertEquals("Впереди дверной проем", decision.spokenText)
+    }
+
+    @Test
+    fun testCompactLowRiskObstacleAndFurnitureStairsSuppression() {
+        val processor = VisionResultProcessor()
+        val evaluateUseCase = EvaluateHazardsUseCase()
+
+        // Sports ball covering 16% of frame -> NEAR via compact profile, but dangerPriority == 1 (non-urgent)
+        val ball = RawDetectedObject(
+            boundingBox = BoundingBox2D(left = 300f, top = 300f, right = 700f, bottom = 700f),
+            labels = listOf(RawLabel("sports ball", 0.85f))
+        )
+        // Couch + moderate Stairs -> false stairs suppressed without Armrest alert
+        val labels = listOf(
+            RawLabel("Couch", 0.65f),
+            RawLabel("Stairs", 0.68f)
+        )
+
+        val frameResult = processor.process(
+            detectedObjects = listOf(ball),
+            imageLabels = labels,
+            imageWidth = 1000,
+            imageHeight = 1000,
+            timestamp = 1000L
+        )
+
+        assertTrue(frameResult.spatialHazards.isEmpty())
+        assertEquals(1, frameResult.obstacles.size)
+        assertEquals(DistanceCategory.NEAR, frameResult.obstacles[0].estimatedDistanceCategory)
+
+        val decision = evaluateUseCase(frameResult)
+        assertEquals("Прямо мяч, обойдите слева", decision.spokenText)
+        assertFalse(decision.isUrgent)
     }
 }

@@ -24,24 +24,20 @@ class VisionResultProcessorTest {
     }
 
     @Test
-    fun `HazardClassifier - armrest confidence at or above 40 percent marks armrest dominant`() {
+    fun `HazardClassifier - armrest label suppresses false stairs when stairs confidence below 72 percent`() {
         val labels = listOf(
             RawLabel(text = "Armrest", confidence = 0.45f),
-            RawLabel(text = "Stairs", confidence = 0.60f)
+            RawLabel(text = "Stairs", confidence = 0.68f)
         )
 
         val hazards = hazardClassifier.classify(labels, hasPhysicalObjects = false)
 
-        val armrestHazard = hazards.filterIsInstance<SpatialHazard.ArmrestDetected>().firstOrNull()
-        val stairsHazard = hazards.filterIsInstance<SpatialHazard.StairsAhead>().firstOrNull()
-
-        assertTrue("Armrest hazard should be detected", armrestHazard != null)
-        assertEquals(0.45f, armrestHazard!!.confidence, 0.001f)
-        assertTrue("Stairs should be suppressed by armrest dominance", stairsHazard == null)
+        assertFalse("Stairs should be suppressed by armrest furniture context", hazards.any { it is SpatialHazard.StairsAhead })
+        assertTrue("No spatial hazard should be emitted for furniture alone", hazards.isEmpty())
     }
 
     @Test
-    fun `HazardClassifier - high furniture confidence with moderate stairs confidence favors armrest`() {
+    fun `HazardClassifier - high furniture confidence suppresses moderate false stairs`() {
         val labels = listOf(
             RawLabel(text = "Couch", confidence = 0.65f),
             RawLabel(text = "Stairs", confidence = 0.68f)
@@ -49,8 +45,8 @@ class VisionResultProcessorTest {
 
         val hazards = hazardClassifier.classify(labels, hasPhysicalObjects = false)
 
-        assertTrue(hazards.any { it is SpatialHazard.ArmrestDetected })
-        assertFalse(hazards.any { it is SpatialHazard.StairsAhead })
+        assertFalse("Striped furniture upholstery must not trigger StairsAhead", hazards.any { it is SpatialHazard.StairsAhead })
+        assertTrue(hazards.isEmpty())
     }
 
     @Test
@@ -65,7 +61,18 @@ class VisionResultProcessorTest {
         val stairsHazard = hazards.filterIsInstance<SpatialHazard.StairsAhead>().firstOrNull()
         assertTrue("Stairs should be detected", stairsHazard != null)
         assertEquals(0.85f, stairsHazard!!.confidence, 0.001f)
-        assertFalse(hazards.any { it is SpatialHazard.ArmrestDetected })
+    }
+
+    @Test
+    fun `HazardClassifier - strong stairs at or above 72 percent is not suppressed by background furniture`() {
+        val labels = listOf(
+            RawLabel(text = "Stairs", confidence = 0.82f),
+            RawLabel(text = "Couch", confidence = 0.60f)
+        )
+
+        val hazards = hazardClassifier.classify(labels, hasPhysicalObjects = false)
+
+        assertTrue(hazards.any { it is SpatialHazard.StairsAhead })
     }
 
     @Test
@@ -85,8 +92,10 @@ class VisionResultProcessorTest {
 
         val hazards = hazardClassifier.classify(labels, hasPhysicalObjects = true)
 
-        assertFalse("Wall proximity should be suppressed when objects are present",
-            hazards.any { it is SpatialHazard.WallProximity })
+        assertFalse(
+            "Wall proximity should be suppressed when objects are present",
+            hazards.any { it is SpatialHazard.WallProximity }
+        )
     }
 
     @Test
@@ -129,6 +138,18 @@ class VisionResultProcessorTest {
         assertFalse(classifier.isIgnored(boxArea = 70_000f, totalArea = totalArea))
     }
 
+    @Test
+    fun `SpatialClassifier - compact objects use 14 5 and 2 percent area thresholds`() {
+        val classifier = SpatialClassifier()
+        val totalArea = 1_000_000f
+
+        assertEquals(DistanceCategory.NEAR, classifier.classifyDistance(150_000f, totalArea, isCompact = true))
+        assertEquals(DistanceCategory.MEDIUM, classifier.classifyDistance(60_000f, totalArea, isCompact = true))
+        assertEquals(DistanceCategory.FAR, classifier.classifyDistance(30_000f, totalArea, isCompact = true))
+        assertTrue(classifier.isIgnored(15_000f, totalArea, isCompact = true))
+        assertFalse(classifier.isIgnored(25_000f, totalArea, isCompact = true))
+    }
+
     // LabelFormatter: string sanitization in isolation
 
     @Test
@@ -141,33 +162,42 @@ class VisionResultProcessorTest {
         assertEquals("Remote control", formatter.format("remote"))
         assertEquals("Ball", formatter.format("sports ball"))
         assertEquals("Hair dryer", formatter.format("hair drier"))
-        assertEquals("Armrest", formatter.format("armrest"))
     }
 
-    @Test
-    fun `HazardClassifier - legacy ML Kit category is not treated as armrest`() {
-        assertFalse(hazardClassifier.isArmrestObject("Home good", isArmrestDominant = true))
-        assertTrue(hazardClassifier.isArmrestObject("couch", isArmrestDominant = true))
-        assertTrue(hazardClassifier.isArmrestObject("chair", isArmrestDominant = true))
-    }
-
-    // VisionResultProcessor: allow-list and area filter
+    // VisionResultProcessor: curated allow-list, area filter, temporal tracking, and priority sorting
 
     @Test
-    fun `VisionResultProcessor - filters allowed COCO classes only`() {
+    fun `VisionResultProcessor - filters curated 23 navigation COCO classes only`() {
         val processor = VisionResultProcessor()
         assertTrue(processor.isAllowedObject("person"))
+        assertTrue(processor.isAllowedObject("car"))
+        assertTrue(processor.isAllowedObject("bus"))
+        assertTrue(processor.isAllowedObject("truck"))
+        assertTrue(processor.isAllowedObject("motorcycle"))
+        assertTrue(processor.isAllowedObject("bicycle"))
+        assertTrue(processor.isAllowedObject("dog"))
+        assertTrue(processor.isAllowedObject("cat"))
         assertTrue(processor.isAllowedObject("chair"))
+        assertTrue(processor.isAllowedObject("couch"))
         assertTrue(processor.isAllowedObject("dining table"))
         assertTrue(processor.isAllowedObject("bench"))
+        assertTrue(processor.isAllowedObject("bed"))
         assertTrue(processor.isAllowedObject("backpack"))
         assertTrue(processor.isAllowedObject("suitcase"))
         assertTrue(processor.isAllowedObject("potted plant"))
-        assertTrue(processor.isAllowedObject("car"))
-        assertTrue(processor.isAllowedObject("bicycle"))
-        assertTrue(processor.isAllowedObject("dog"))
+        assertTrue(processor.isAllowedObject("fire hydrant"))
+        assertTrue(processor.isAllowedObject("stop sign"))
+        assertTrue(processor.isAllowedObject("traffic light"))
+        assertTrue(processor.isAllowedObject("parking meter"))
+        assertTrue(processor.isAllowedObject("handbag"))
+        assertTrue(processor.isAllowedObject("umbrella"))
+        assertTrue(processor.isAllowedObject("sports ball"))
 
         assertFalse(processor.isAllowedObject("bottle"))
+        assertFalse(processor.isAllowedObject("cup"))
+        assertFalse(processor.isAllowedObject("donut"))
+        assertFalse(processor.isAllowedObject("cell phone"))
+        assertFalse(processor.isAllowedObject("saucer"))
         assertFalse(processor.isAllowedObject("door"))
         assertFalse(processor.isAllowedObject("tv"))
     }
@@ -205,26 +235,70 @@ class VisionResultProcessorTest {
     }
 
     @Test
-    fun `VisionResultProcessor - obstacle label remapped to Armrest when armrest dominant`() {
+    fun `VisionResultProcessor - sorts obstacles by dangerPriority desc distanceCategory asc confidence desc`() {
         val processor = VisionResultProcessor()
-        val labels = listOf(RawLabel("Armrest", 0.50f))
         val objects = listOf(
+            // Priority 1 (sports ball, NEAR via compact >= 14%: 400x400 = 16%)
             RawDetectedObject(
-                boundingBox = BoundingBox2D(100f, 100f, 400f, 400f),
-                labels = listOf(RawLabel("chair", 0.70f))
+                boundingBox = BoundingBox2D(300f, 300f, 700f, 700f),
+                labels = listOf(RawLabel("sports ball", 0.95f))
+            ),
+            // Priority 2 (chair, NEAR >= 28%: 600x600 = 36%)
+            RawDetectedObject(
+                boundingBox = BoundingBox2D(200f, 200f, 800f, 800f),
+                labels = listOf(RawLabel("chair", 0.92f))
+            ),
+            // Priority 3 (person, MEDIUM 12..28%: 400x400 = 16%)
+            RawDetectedObject(
+                boundingBox = BoundingBox2D(300f, 200f, 700f, 600f),
+                labels = listOf(RawLabel("person", 0.78f))
+            ),
+            // Priority 3 (car, NEAR >= 28%: 600x500 = 30%)
+            RawDetectedObject(
+                boundingBox = BoundingBox2D(200f, 250f, 800f, 750f),
+                labels = listOf(RawLabel("car", 0.80f))
             )
         )
 
         val result = processor.process(
             detectedObjects = objects,
-            imageLabels = labels,
+            imageLabels = emptyList(),
             imageWidth = 1000,
-            imageHeight = 1000
+            imageHeight = 1000,
+            timestamp = 1000L
         )
 
-        assertEquals(1, result.obstacles.size)
-        assertEquals("Armrest", result.obstacles[0].label)
-        assertTrue(result.obstacles[0].isArmrest)
+        assertEquals(4, result.obstacles.size)
+        assertEquals(listOf("Car", "Person", "Chair", "Ball"), result.obstacles.map { it.label })
+        assertEquals(listOf(0, 1, 2, 3), result.obstacles.map { it.id })
+    }
+
+    @Test
+    fun `VisionResultProcessor - weak non near detection requires two frames while near confirms immediately`() {
+        val processor = VisionResultProcessor()
+        val weakMediumChair = RawDetectedObject(
+            boundingBox = BoundingBox2D(300f, 200f, 700f, 600f), // 16% -> MEDIUM
+            labels = listOf(RawLabel("chair", 0.48f))
+        )
+        val weakNearChair = RawDetectedObject(
+            boundingBox = BoundingBox2D(200f, 150f, 800f, 750f), // 36% -> NEAR
+            labels = listOf(RawLabel("chair", 0.48f))
+        )
+
+        // Frame 1: weak MEDIUM chair is held pending confirmation
+        val r1 = processor.process(listOf(weakMediumChair), emptyList(), 1000, 1000, timestamp = 1000L)
+        assertTrue(r1.obstacles.isEmpty())
+
+        // Frame 2 (within 750 ms): second matching hit confirms MEDIUM chair
+        val r2 = processor.process(listOf(weakMediumChair), emptyList(), 1000, 1000, timestamp = 1180L)
+        assertEquals(1, r2.obstacles.size)
+        assertEquals("Chair", r2.obstacles[0].label)
+
+        // Reset processor and verify weak NEAR chair confirms on very first frame
+        processor.reset()
+        val rNear = processor.process(listOf(weakNearChair), emptyList(), 1000, 1000, timestamp = 2000L)
+        assertEquals(1, rNear.obstacles.size)
+        assertEquals(DistanceCategory.NEAR, rNear.obstacles[0].estimatedDistanceCategory)
     }
 
     @Test
